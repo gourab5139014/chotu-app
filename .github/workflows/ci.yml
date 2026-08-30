@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege. No job here needs write access or repository secrets.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect Node project
+        id: detect
+        run: |
+          if [ -f package.json ]; then
+            echo "node=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "node=false" >> "$GITHUB_OUTPUT"
+            echo "No package.json yet. Skipping install, lint, and test."
+          fi
+
+      - name: Set up Node
+        if: steps.detect.outputs.node == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        if: steps.detect.outputs.node == 'true'
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      - name: Lint
+        if: steps.detect.outputs.node == 'true'
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        if: steps.detect.outputs.node == 'true'
+        run: npm run typecheck --if-present
+
+      - name: Test
+        if: steps.detect.outputs.node == 'true'
+        run: npm test --if-present
