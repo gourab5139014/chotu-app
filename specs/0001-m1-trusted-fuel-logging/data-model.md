@@ -12,30 +12,36 @@ Legacy review and migration are spec `0002`.
 
 ### D-1 Canonical units
 
-The database stores one representation. Input and display convert at the API
-edge.
+Chotu targets the United States market. The database stores **US customary
+units**, as integers. Input and display convert to and from a user's preference
+at the API edge. A US user, the common case, needs no conversion. Fuel economy
+in miles per gallon is then a direct divide with no unit change.
 
-| Quantity | Canonical unit | Column type |
-|---|---|---|
-| Distance, odometer | metre (integer) | `bigint` / `integer` |
-| Volume | millilitre (integer) | `bigint` / `integer` |
-| Money | minor currency unit, for example cent (integer) | `bigint` |
-| Date of a fill-up | calendar date, no time | `date` |
-| Timestamps | UTC instant | `timestamptz` / `text` ISO-8601 |
+| Quantity | Canonical unit | Scale | Column type |
+|---|---|---|---|
+| Distance, odometer | mile | thousandth of a mile (`0.001 mi`) | `bigint` |
+| Volume | US gallon | thousandth of a gallon (`0.001 gal`) | `bigint` |
+| Money | US dollar | cent (`0.01 USD`) | `bigint` |
+| Date of a fill-up | calendar date, no time | — | `date` |
+| Timestamps | UTC instant | — | `timestamptz` / `text` ISO-8601 |
 
 Reason: integers remove floating-point error from reconciliation and metrics.
-Metre and millilitre give more than enough precision for odometer and pump
-readings. Each user's unit system and currency drive conversion only.
+The chosen scales cover a trip meter and a three-decimal pump display with
+headroom. A 2,000,000-mile odometer is `2_000_000_000` thousandths, well inside
+`bigint`.
 
-*Open:* confirm integer millilitre is precise enough for pump volume, or move to
-a fixed 3-decimal litre stored as integer thousandths. See `open-questions.md`.
+Column names carry the unit and scale: `odometer_mi_e3`, `volume_gal_e3`,
+`total_cost_usd_cents`. Every read returns the canonical integers plus a display
+projection.
+
+*Open:* confirm the integer scales. See `open-questions.md` Q-4.
 
 ### D-2 Currency
 
-One currency per user, stored on the user as an ISO-4217 code. Each fuel entry
-also records the currency code in force when it was created, so a later change to
-the user's currency does not corrupt history. Cross-currency conversion is out of
-scope.
+USD is the default and the only supported currency in M1. The user still holds
+a `currency_code`, defaulting to `USD`, and each fuel entry records the code in
+force when it was created, so a later change does not corrupt history.
+Cross-currency conversion and non-USD deployments are out of scope for M1.
 
 ### D-3 Source unit audit
 
@@ -76,9 +82,9 @@ One row. Deployment-wide policy. Created by bootstrap.
 | `deployment_name` | text | no | shown to users |
 | `registration_policy` | text | no | `invite_only` (default), `open`, `sso_auto` |
 | `allowed_auth_methods` | text[] / json | no | subset of `password`, `oidc`. Non-empty |
-| `default_unit_system` | text | no | `metric` or `imperial` |
-| `default_currency_code` | text | no | ISO-4217 |
-| `default_time_zone` | text | no | IANA name |
+| `default_unit_system` | text | no | `imperial` (default) or `metric` |
+| `default_currency_code` | text | no | ISO-4217. `USD` in M1 |
+| `default_time_zone` | text | no | IANA name. `America/New_York` default |
 | `session_ttl_seconds` | integer | no | browser session lifetime |
 | `api_token_ttl_seconds` | integer | yes | null means no expiry |
 | `created_at` | timestamptz | no | |
@@ -122,8 +128,8 @@ An account holder.
 | `role` | text | no | `user` (default) or `admin` |
 | `status` | text | no | `active` (default) or `deactivated` |
 | `password_hash` | text | yes | null for an OIDC-only account. Argon2id |
-| `unit_system` | text | no | `metric` or `imperial` |
-| `currency_code` | text | no | ISO-4217, 3 letters |
+| `unit_system` | text | no | `imperial` (default) or `metric`. Display and input only |
+| `currency_code` | text | no | ISO-4217, 3 letters. Defaults to `USD` |
 | `time_zone` | text | no | IANA name, for the future-date check |
 | `created_at` | timestamptz | no | |
 | `updated_at` | timestamptz | no | |
@@ -242,13 +248,13 @@ No update or delete path. Retention policy is out of scope for M1.
 | `model` | text | yes | |
 | `year` | integer | yes | 1900..2100 |
 | `fuel_type` | text | yes | `gasoline`, `diesel`, `ev`, `hybrid`, `other` |
-| `initial_odometer_m` | bigint | no | canonical metres, 0 or greater |
+| `initial_odometer_mi_e3` | bigint | no | thousandths of a mile, 0 or greater |
 | `archived_at` | timestamptz | yes | null means active |
 | `created_at` | timestamptz | no | |
 | `updated_at` | timestamptz | no | |
 
-Constraints: `initial_odometer_m >= 0`. `year` range check. `fuel_type` in the
-allowed set when present. Foreign key to `user` with `on delete restrict`.
+Constraints: `initial_odometer_mi_e3 >= 0`. `year` range check. `fuel_type` in
+the allowed set when present. Foreign key to `user` with `on delete restrict`.
 Index on `(user_id, archived_at)`.
 
 ### fuel_entry
@@ -258,10 +264,10 @@ Index on `(user_id, archived_at)`.
 | `id` | uuid | no | primary key |
 | `vehicle_id` | uuid | no | foreign key to `vehicle.id`, on delete restrict |
 | `entry_date` | date | no | calendar date of the fill-up |
-| `odometer_m` | bigint | no | canonical metres, 0 or greater |
-| `volume_ml` | bigint | no | canonical millilitres, greater than 0 |
-| `total_cost_minor` | bigint | no | canonical minor units, 0 or greater |
-| `currency_code` | text | no | ISO-4217 in force at creation |
+| `odometer_mi_e3` | bigint | no | thousandths of a mile, 0 or greater |
+| `volume_gal_e3` | bigint | no | thousandths of a US gallon, greater than 0 |
+| `total_cost_usd_cents` | bigint | no | USD cents, 0 or greater |
+| `currency_code` | text | no | ISO-4217 in force at creation. `USD` in M1 |
 | `is_full_tank` | boolean | no | default true |
 | `notes` | text | yes | 0..1000 chars |
 | `source_unit_system` | text | no | `metric` or `imperial` at creation |
@@ -269,10 +275,11 @@ Index on `(user_id, archived_at)`.
 | `created_at` | timestamptz | no | |
 | `updated_at` | timestamptz | no | |
 
-Constraints: `volume_ml > 0`. `total_cost_minor >= 0`. `odometer_m >= 0`.
-`currency_code` matches `^[A-Z]{3}$`. `source_unit_system` in the allowed set.
-Foreign key to `vehicle` with `on delete restrict`. Index on
-`(vehicle_id, entry_date desc, created_at desc)` for history and pagination.
+Constraints: `volume_gal_e3 > 0`. `total_cost_usd_cents >= 0`.
+`odometer_mi_e3 >= 0`. `currency_code` matches `^[A-Z]{3}$`.
+`source_unit_system` in the allowed set. Foreign key to `vehicle` with
+`on delete restrict`. Index on `(vehicle_id, entry_date desc, created_at desc)`
+for history and pagination.
 
 Note: `fuel_entry` has no `user_id`. Ownership is the chain through `vehicle`.
 Every query filters by the calling user's id joined through `vehicle`.
@@ -308,9 +315,9 @@ value FR-1.3 validates.
   foreign keys and re-checked in the API. No entry without a vehicle. No vehicle
   without a user.
 - **INV-2 Odometer progression.** Order a vehicle's entries by `entry_date`,
-  then `created_at`. Each entry's `odometer_m` is greater than or equal to the
-  previous entry's, and greater than or equal to the vehicle's
-  `initial_odometer_m`. A strict decrease is rejected at write time
+  then `created_at`. Each entry's `odometer_mi_e3` is greater than or equal to
+  the previous entry's, and greater than or equal to the vehicle's
+  `initial_odometer_mi_e3`. A strict decrease is rejected at write time
   (`odometer_decrease`). A tie passes the write and is reported by
   reconciliation. *(Confirm the tie rule.)*
 - **INV-3 Archived vehicle is read-only for entries.** No create or update of a
@@ -340,9 +347,10 @@ per-row checks and every foreign key.
 
 Computed on read. Listed so nobody adds a column for them.
 
-- Price per litre or per gallon: `total_cost_minor / volume_ml`, converted.
-- Distance since the previous entry: difference of `odometer_m`.
-- Fuel economy over a full-tank interval: sum of volume over distance.
+- Price per gallon: `total_cost_usd_cents / volume_gal_e3`, scaled.
+- Distance since the previous entry: difference of `odometer_mi_e3`.
+- Fuel economy in miles per gallon over a full-tank interval: distance over the
+  sum of volume. No unit conversion, both are already US customary.
 
 ## Adapter notes
 

@@ -8,11 +8,25 @@ spec, then remove the question.
 **Not started, by direction of the project lead.** The Linear delivery sequence
 phase 1 covers this. It becomes spec `0002`.
 
-Scope when it starts:
+### Prior prototypes and infrastructure (resolved)
 
-- Inventory the two prior prototypes. Known: `~/Workspace/carmanager`. The second
-  prototype is unidentified — **Q-1a: which repository is the second prototype?**
-- Catalog the legacy schema and its mistakes. Candidates from prior notes:
+| Prototype | Repo | Local clone | Backend | Frontend host |
+|---|---|---|---|---|
+| 1 — carmanager | https://github.com/gourab5139014/carmanager | `~/Workspace/carmanager` | Supabase project `cofmlyvqhxjkmyzbtrsy` | — |
+| 2 — crunch-my-car | https://github.com/gourab5139014/crunch-my-car | `~/Workspace/crunch-my-car` | Supabase project `yiejtkppiwhzedyfeyuv` | Vercel `crunch-my-car` |
+
+- carmanager: last local commit `c7666f0` (2026-05-18), "multi-tenant
+  environment isolation via schema-per-environment".
+- crunch-my-car: last local commit `015fb19` (2026-05-31), "unify display units
+  under global user profile (issue #22)".
+- A Render dashboard exists (`dashboard.render.com`). Identify which prototype it
+  hosts during the review.
+- Access to the Supabase projects and any Render service is needed before the
+  export step.
+
+### Scope when it starts
+
+- Catalog each legacy schema and its mistakes. Candidates from prior notes:
   no `vehicle_id` on early rows, client-side computed `distance`, dashboard data
   committed to git, schema split across `dev` and `legacy`.
 - Extract reusable modules only: Drivvo import and parsing, metrics and unit
@@ -28,8 +42,8 @@ This must not block `0001`. The canonical schema is designed fresh.
 INV-2 lets two entries share an odometer value. Options:
 
 - **A.** Allow the tie, report it in reconciliation. (current draft)
-- **B.** Reject a tie unless the later entry has `volume_ml` consistent with a
-  top-up on the same reading.
+- **B.** Reject a tie unless the later entry has `volume_gal_e3` consistent with
+  a top-up on the same reading.
 - **C.** Reject all ties.
 
 A tie is common when someone logs two fills on the same day without driving. Lean
@@ -41,11 +55,22 @@ FR-13.4 and INV-4 use "at most one day in the future" in the owning user's time
 zone. Time-zone edge cases and travel across date lines make zero tolerance
 annoying. Confirm one day, or pick another window.
 
-## Q-4 Volume precision
+## Q-4 Canonical unit scale
 
-`data-model.md` D-1 stores volume as integer millilitres. A pump shows three
-decimals of a litre or gallon. Integer millilitres holds that. Confirm, or store
-integer thousandths of a litre to match pump display exactly.
+**Resolved:** the product targets the United States market, so the database
+stores US customary units. Distance in miles, volume in US gallons, money in
+USD cents. The API converts to and from a user's preference at the edge. See
+`data-model.md` D-1.
+
+Still to confirm — the integer scale:
+
+- Distance: integer thousandths of a mile (`0.001 mi`). Covers trip-meter
+  granularity with headroom. Alternative: hundredths.
+- Volume: integer thousandths of a US gallon (`0.001 gal`). Matches a pump's
+  three-decimal display. Alternative: ten-thousandths.
+- Money: integer cents. No sub-cent case in M1.
+
+Confirm the scales, or pick alternatives.
 
 ## Q-5 Conversion tolerance
 
