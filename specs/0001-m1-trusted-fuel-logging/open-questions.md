@@ -40,28 +40,15 @@ This must not block `0001`. The canonical schema is designed fresh.
 
 ## Open
 
-### Q-8 API token model — needs a decision
-
-**Which token.** This is the **per-user API token** from FR-5. It is not the
-browser session, and not the one-time token that `bootstrap` prints. A user
-creates one so a non-browser caller can act as them: the `chotu` CLI, an LLM
-chat client such as Claude Code, a cron job, a script. It is a bearer string.
-The API stores only its hash. It carries the user's identity and role.
-
-**The choice.** How many can be active at once per user?
-
-- **A — several named tokens (draft).** Like GitHub personal access tokens. One
-  labelled `cli`, one `claude-code`, one `backup-cron`. Each is listed and
-  revoked on its own. Revoking one does not disturb the others. Optional
-  per-token expiry from `deployment_settings.api_token_ttl_seconds`.
-- **B — one active token per user.** Creating a token revokes the previous one.
-  Simpler to reason about. A leaked token and a rotation are the same action.
-  A user who runs two tools shares one secret between them.
-
-Recommendation: **A**. It matches U-49 (list, revoke, reissue) and the fact that
-a person will likely wire the API into more than one tool. Confirm A, or pick B.
+None. All items are resolved or moved to the research backlog.
 
 ## Resolved
+
+- **Q-8 API token model → A.** Several named per-user API tokens, like GitHub
+  personal access tokens. Each has a label, is listed and revoked on its own,
+  and does not disturb the others. Optional per-token expiry from
+  `deployment_settings.api_token_ttl_seconds`. This is the FR-5 draft; no spec
+  change needed.
 
 - **Q-2 Odometer ties → A.** A later entry may share the previous odometer
   value. The write succeeds. Reconciliation reports the tie. A strict decrease
