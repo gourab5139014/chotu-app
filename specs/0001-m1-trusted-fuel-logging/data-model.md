@@ -25,16 +25,25 @@ in miles per gallon is then a direct divide with no unit change.
 | Date of a fill-up | calendar date, no time | — | `date` |
 | Timestamps | UTC instant | — | `timestamptz` / `text` ISO-8601 |
 
-Reason: integers remove floating-point error from reconciliation and metrics.
-The chosen scales cover a trip meter and a three-decimal pump display with
-headroom. A 2,000,000-mile odometer is `2_000_000_000` thousandths, well inside
-`bigint`.
+Reason: exact fixed-point integers remove binary-float error from reconciliation
+and metrics. A 2,000,000-mile odometer is `2_000_000_000` thousandths, well
+inside `bigint`.
 
 Column names carry the unit and scale: `odometer_mi_e3`, `volume_gal_e3`,
 `total_cost_usd_cents`. Every read returns the canonical integers plus a display
 projection.
 
-*Open:* confirm the integer scales. See `open-questions.md` Q-4.
+**Fuel volume precision.** The project lead asked for a fuel value with three
+decimal digits, configurable per install. `volume_gal_e3` stores the value
+exactly as an integer at scale 3, so cross-adapter arithmetic stays exact. The
+number of fractional digits the API accepts, rounds to, stores as meaningful,
+and displays is `deployment_settings.fuel_volume_precision`. Default `3`, range
+`1..3`. The same setting drives the derived price-per-gallon. It is set at
+install time and used everywhere volume or price appears.
+
+*Note:* the API represents volume and price as JSON numbers with up to
+`fuel_volume_precision` fractional digits. Storage stays an exact integer.
+Raising precision above 3 would need a schema migration.
 
 ### D-2 Currency
 
@@ -85,13 +94,15 @@ One row. Deployment-wide policy. Created by bootstrap.
 | `default_unit_system` | text | no | `imperial` (default) or `metric` |
 | `default_currency_code` | text | no | ISO-4217. `USD` in M1 |
 | `default_time_zone` | text | no | IANA name. `America/New_York` default |
+| `fuel_volume_precision` | integer | no | fractional digits for volume and price. Default `3`, range `1..3` |
 | `session_ttl_seconds` | integer | no | browser session lifetime |
 | `api_token_ttl_seconds` | integer | yes | null means no expiry |
 | `created_at` | timestamptz | no | |
 | `updated_at` | timestamptz | no | |
 
 Constraints: `registration_policy` and `default_unit_system` in their allowed
-sets. `allowed_auth_methods` is non-empty. A single-row guard.
+sets. `allowed_auth_methods` is non-empty. `fuel_volume_precision between 1 and
+3`. A single-row guard.
 
 ### oidc_provider
 
@@ -128,6 +139,7 @@ An account holder.
 | `role` | text | no | `user` (default) or `admin` |
 | `status` | text | no | `active` (default) or `deactivated` |
 | `password_hash` | text | yes | null for an OIDC-only account. Argon2id |
+| `must_change_password` | boolean | no | default false. Set for the seeded `scott` admin |
 | `unit_system` | text | no | `imperial` (default) or `metric`. Display and input only |
 | `currency_code` | text | no | ISO-4217, 3 letters. Defaults to `USD` |
 | `time_zone` | text | no | IANA name, for the future-date check |
@@ -303,9 +315,14 @@ value FR-1.3 validates.
 
 1. The Chotu schema objects and the migration journal.
 2. The `deployment_settings` singleton, from supplied or default values.
-3. The first `user` with `role = 'admin'` and `status = 'active'`. The operator
-   supplies the email and a password, or bootstrap prints a one-time
-   set-password link.
+3. The first `user` with `role = 'admin'` and `status = 'active'`. Three ways to
+   set its credentials:
+   - The operator passes an email and a password.
+   - The operator takes a one-time set-password link that bootstrap prints.
+   - The operator passes nothing. Bootstrap seeds `scott@chotu.local` with
+     password `tiger`, sets `must_change_password = true`, and prints a warning.
+     A nod to the classic Oracle demo account. The API refuses non-development
+     traffic while a default-credential admin still has the unchanged password.
 4. One `api_token` for that admin, printed once, so the operator can call the
    API immediately from the CLI or an agent.
 
@@ -318,12 +335,13 @@ value FR-1.3 validates.
   then `created_at`. Each entry's `odometer_mi_e3` is greater than or equal to
   the previous entry's, and greater than or equal to the vehicle's
   `initial_odometer_mi_e3`. A strict decrease is rejected at write time
-  (`odometer_decrease`). A tie passes the write and is reported by
-  reconciliation. *(Confirm the tie rule.)*
+  (`odometer_decrease`). A tie is allowed: the write succeeds and reconciliation
+  reports it. (Resolved, open question Q-2 option A.)
 - **INV-3 Archived vehicle is read-only for entries.** No create or update of a
   `fuel_entry` whose vehicle has a non-null `archived_at`.
-- **INV-4 Future date bound.** `entry_date` is at most one day after the current
-  date in the owning user's `time_zone`. *(Confirm the window.)*
+- **INV-4 Future date bound.** `entry_date` is at most two days after the current
+  date in the owning user's `time_zone`. The two-day window absorbs date-line
+  and travel cases. (Resolved, open question Q-3.)
 - **INV-5 Full-tank economy interval.** Fuel economy over an interval is defined
   only between two `is_full_tank` entries. First fill-up and partial fills
   produce no economy figure, not a misleading one. Metrics are phase 3. This
@@ -367,6 +385,11 @@ Computed on read. Listed so nobody adds a column for them.
 
 Drizzle exposes both dialects. The persistence layer picks the column helpers by
 adapter. Application and route code see one set of domain types.
+
+**SQLite is for local development and the test suite only.** Staging and
+production run PostgreSQL. SQLite stays a first-class adapter so the persistence
+boundary is exercised on every developer machine and in CI, not because it is a
+deployment target. (Resolved, open question Q-9.)
 
 ## Minimum database privileges
 

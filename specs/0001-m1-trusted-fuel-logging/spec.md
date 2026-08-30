@@ -76,11 +76,19 @@ Each journey is a sequence of API calls now, and a screen flow later.
   error that names the missing grant. No objects outside the Chotu-owned schema
   are created or altered.
 - FR-1.5 Bootstrap creates the `deployment_settings` singleton and the first
-  `user` with the admin role. The operator supplies the admin email and a
-  password, or bootstrap prints a one-time set-password link.
-- FR-1.6 Bootstrap prints one API token for the first admin, once.
-- FR-1.7 The minimum privilege set for each adapter is documented.
-- FR-1.8 Routine API flows use a database role that cannot alter schema.
+  `user` with the admin role. Credentials come from one of three paths:
+  - the operator passes an email and a password;
+  - the operator takes a one-time set-password link that bootstrap prints;
+  - the operator passes nothing, and bootstrap seeds `scott@chotu.local` with
+    password `tiger`, sets `must_change_password`, and prints a warning.
+- FR-1.6 While any admin still holds an unchanged seeded default password, the
+  API serves only in development mode. It refuses to start in production mode
+  and states why.
+- FR-1.7 Bootstrap prints one API token for the first admin, once.
+- FR-1.8 The minimum privilege set for each adapter is documented.
+- FR-1.9 Routine API flows use a database role that cannot alter schema.
+- FR-1.10 SQLite is a development and test adapter only. Staging and production
+  run PostgreSQL.
 
 ### FR-2 Sign-in and sessions
 
@@ -121,6 +129,10 @@ Each journey is a sequence of API calls now, and a screen flow later.
   password and revokes all of that user's sessions.
 - FR-4.4 An admin may trigger a reset for a user, which sends or returns a reset
   link for that user.
+- FR-4.5 A user whose account has `must_change_password` set may sign in, but
+  every request other than "change password" returns `403` with
+  `password_change_required` until a new password is set. This covers the seeded
+  `scott` admin.
 
 ### FR-5 API tokens
 
@@ -234,10 +246,10 @@ Each journey is a sequence of API calls now, and a screen flow later.
 - FR-13.3 Odometer progression: within one vehicle, a later entry, ordered by
   entry date then creation time, has an odometer greater than or equal to the
   previous entry and the vehicle's starting odometer. A decrease is rejected
-  with `odometer_decrease`. A tie passes the write and is flagged by
-  reconciliation. *(Confirm the tie rule — see `open-questions.md`.)*
-- FR-13.4 Entry date is at most one day in the future in the owning user's time
-  zone. *(Confirm the window.)*
+  with `odometer_decrease`. A tie is allowed: the write succeeds and
+  reconciliation flags it. (Open question Q-2 resolved, option A.)
+- FR-13.4 Entry date is at most two days in the future in the owning user's time
+  zone. The two-day window absorbs date-line and travel cases. (Q-3 resolved.)
 - FR-13.5 A create or update against an archived vehicle is rejected.
 - FR-13.6 All rejections use the standard error body with a stable `code`.
 
@@ -260,18 +272,24 @@ Each journey is a sequence of API calls now, and a screen flow later.
 - FR-15.3 Responses include both the canonical integer values and a display
   projection in the user's unit system.
 - FR-15.4 Conversion is lossless enough that a round trip through the API
-  returns the same displayed value. A US user's values need no conversion.
-  *(Define the tolerance for metric input — see `open-questions.md` Q-5.)*
+  returns the same displayed value, to the configured fuel precision. A US
+  user's values need no conversion.
 - FR-15.5 USD is the only supported currency in M1. The user's `currency_code`
   defaults to `USD`.
+- FR-15.6 `deployment_settings.fuel_volume_precision` sets the number of
+  fractional digits, default `3`, range `1..3`, for every volume the API
+  accepts, stores as meaningful, and returns, and for the derived
+  price-per-gallon. An admin sets it at install time. Raising it above 3 needs a
+  schema migration. (Q-4 and Q-5 resolved.)
 
 ### FR-16 Export
 
 - FR-16.1 A user exports all their own profile, vehicle, and fuel-entry data in
   one documented, machine-readable file.
 - FR-16.2 The export states the schema version and the canonical units.
-- FR-16.3 The export is enough to rebuild that user's dataset in a fresh
-  account. *(Round-trip import timing — see `open-questions.md` Q-7.)*
+- FR-16.3 The export is complete enough to rebuild that user's dataset later.
+  **Import is not in M1.** It lands in `0002` / M2, with the legacy migration.
+  (Q-7 resolved.)
 
 ### FR-17 Reconciliation checks
 
@@ -305,14 +323,21 @@ Each journey is a sequence of API calls now, and a screen flow later.
 ## Non-functional requirements
 
 - **Portability.** Every requirement passes against PostgreSQL and SQLite. No
-  database-specific code outside the persistence layer.
+  database-specific code outside the persistence layer. SQLite is for local
+  development and the test suite. Staging and production run PostgreSQL.
+- **Deployment-agnostic.** The API process is stateless. PostgreSQL is the only
+  stateful dependency. All configuration comes from the environment. No coupling
+  to a specific host, so a deployment target can be swapped. Target selection is
+  research item R-1.
 - **Isolation.** A request as user A never reads or writes user B's vehicles or
   fuel entries. The admin role does not widen this. Covered by the `isolation`
   fixture and explicit tests.
 - **Auth hardening.** Argon2id for passwords. Rate limiting on sign-in,
-  password-reset request, and invitation acceptance. Generic responses on
-  sign-in and reset to avoid account enumeration. Tokens and session ids stored
-  as hashes only.
+  password-reset request, and invitation acceptance, per IP and per account.
+  Draft thresholds, tuned during the plan: sign-in 10/min/IP and 5/min/account,
+  reset request 3/hour/IP and 3/hour/account, invitation acceptance 10/hour/IP.
+  Generic responses on sign-in and reset to avoid account enumeration. Tokens
+  and session ids stored as hashes only.
 - **Error format.** One error body shape across the API: `code`, `message`,
   `details`. Codes are stable and documented.
 - **Latency.** A single fuel-entry create is one API call and completes well
@@ -358,7 +383,9 @@ Traceable to the Linear M1 acceptance criteria, restated for a multi-user API.
 
 - The web SPA and any screen work.
 - The `chotu` CLI and the OIDC Device Authorization Grant. Those are M1.5.
-- Database engines beyond PostgreSQL and SQLite.
+- **Data import.** Export only in M1. Import is `0002` / M2.
+- Database engines beyond PostgreSQL and SQLite. PostgreSQL is the only
+  supported staging and production engine.
 - SAML and other non-OIDC single sign-on.
 - Cross-user or shared-vehicle access.
 - Fuel analytics beyond entry capture and reconciliation. Cost, consumption, and

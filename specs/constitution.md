@@ -87,10 +87,10 @@ The API is the product. Every client is equal and talks to the API over HTTP.
 | Frontend | Vite + React, mobile-first SPA | Separate deployable. Talks to the API only over HTTP. Built after the API workflow runs in production. |
 | CLI | `chotu`, ships in M1.5 | First-party client. Authenticates with an API token or the OIDC Device Grant. Machine-readable output. |
 | Persistence | Drizzle ORM | SQL-first. Types are inferred with no codegen step. Supports the launch adapters. |
-| Database adapters at launch | PostgreSQL and SQLite | SQLite for local work and a small self-host. PostgreSQL for larger deployments. Two adapters prove the portability boundary from day one. |
+| Database engines | PostgreSQL for staging and production. SQLite for local development and the test suite. | PostgreSQL is the deployment database. SQLite keeps the persistence boundary honest on every developer machine and in CI. |
 | Migrations | `drizzle-kit` | One change per migration file. `drizzle-kit check` detects drift. |
-| Tests | Vitest (unit and contract), Playwright (end-to-end) | Contract tests run against every adapter. |
-| Deployment | One target, one production environment | Add infrastructure only when usage or collaborators require it. |
+| Tests | Vitest (unit and contract), Playwright (end-to-end) | Contract tests run against both engines. |
+| Deployment | One target, one production environment. Target chosen after research item R-1. | The API is deployment-agnostic, so the target can be swapped. Add infrastructure only when usage or collaborators require it. |
 
 ### Repository shape
 
@@ -143,6 +143,16 @@ chotu-app/
 9. **Reuse is selective.** Carry forward Drivvo import and parsing, metrics and
    unit conversion, migration fixtures, and analytics queries. Do not carry
    forward duplicated CRUD paths, legacy schemas, or unreviewed automation.
+10. **Deployment-agnostic.** The API process is stateless. PostgreSQL is the only
+    stateful dependency. Configuration comes from the environment. Nothing
+    couples the code to one host, so a deployment target can be swapped.
+
+## Research backlog
+
+Open investigations that do not block M1 live in `specs/research-backlog.md`:
+R-1 deployment target and portability, R-2 transactional email in an AI-native
+workflow, R-3 secret storage for a self-hosted app. Each ends in a written
+recommendation folded back into this document or a spec.
 
 ## Contract enforcement
 

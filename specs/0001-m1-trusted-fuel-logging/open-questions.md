@@ -1,7 +1,7 @@
 # 0001 — Open questions
 
-Resolve each before or during the plan step. Record the decision here and in the
-spec, then remove the question.
+Record a decision here and in the spec, then move the item to **Resolved**.
+Research items that do not block M1 live in `../research-backlog.md`.
 
 ## Q-1 Legacy schema review and data migration (deferred)
 
@@ -34,115 +34,86 @@ phase 1 covers this. It becomes spec `0002`.
 - Export the existing data. Roughly 181 refuelings were mentioned in prior notes.
 - Produce a migration plan that maps legacy rows to the canonical model in
   `data-model.md`, with reconciliation on both sides.
+- Import lands here too, in `0002` / M2. It is not in M1. See Resolved Q-7.
 
 This must not block `0001`. The canonical schema is designed fresh.
 
-## Q-2 Odometer ties
+## Open
 
-INV-2 lets two entries share an odometer value. Options:
+### Q-8 API token model — needs a decision
 
-- **A.** Allow the tie, report it in reconciliation. (current draft)
-- **B.** Reject a tie unless the later entry has `volume_gal_e3` consistent with
-  a top-up on the same reading.
-- **C.** Reject all ties.
+**Which token.** This is the **per-user API token** from FR-5. It is not the
+browser session, and not the one-time token that `bootstrap` prints. A user
+creates one so a non-browser caller can act as them: the `chotu` CLI, an LLM
+chat client such as Claude Code, a cron job, a script. It is a bearer string.
+The API stores only its hash. It carries the user's identity and role.
 
-A tie is common when someone logs two fills on the same day without driving. Lean
-A. Confirm.
+**The choice.** How many can be active at once per user?
 
-## Q-3 Future-date window
+- **A — several named tokens (draft).** Like GitHub personal access tokens. One
+  labelled `cli`, one `claude-code`, one `backup-cron`. Each is listed and
+  revoked on its own. Revoking one does not disturb the others. Optional
+  per-token expiry from `deployment_settings.api_token_ttl_seconds`.
+- **B — one active token per user.** Creating a token revokes the previous one.
+  Simpler to reason about. A leaked token and a rotation are the same action.
+  A user who runs two tools shares one secret between them.
 
-FR-13.4 and INV-4 use "at most one day in the future" in the owning user's time
-zone. Time-zone edge cases and travel across date lines make zero tolerance
-annoying. Confirm one day, or pick another window.
+Recommendation: **A**. It matches U-49 (list, revoke, reissue) and the fact that
+a person will likely wire the API into more than one tool. Confirm A, or pick B.
 
-## Q-4 Canonical unit scale
+## Resolved
 
-**Resolved:** the product targets the United States market, so the database
-stores US customary units. Distance in miles, volume in US gallons, money in
-USD cents. The API converts to and from a user's preference at the edge. See
-`data-model.md` D-1.
+- **Q-2 Odometer ties → A.** A later entry may share the previous odometer
+  value. The write succeeds. Reconciliation reports the tie. A strict decrease
+  is still rejected. Applied to `spec.md` FR-13.3 and `data-model.md` INV-2.
+- **Q-3 Future-date window → 2 days.** `entry_date` may be at most two days
+  after today in the user's time zone, to absorb date-line and travel cases.
+  Applied to FR-13.4 and INV-4.
+- **Q-4 Canonical unit scale → exact, three decimals for fuel.** Distance and
+  volume are stored exactly, not as binary floats. Volume carries three
+  fractional digits by default. Money is integer USD cents. See Q-5 for the
+  configurable part, and `data-model.md` D-1 for the storage form.
+- **Q-5 Fuel volume precision → a per-install setting.** `fuel_volume_precision`
+  in `deployment_settings`, default `3`, range `1..3`. The admin sets it during
+  setup. It governs the fractional digits the API accepts, the value it stores,
+  and every displayed volume and derived price-per-gallon. Applied to
+  `data-model.md` and `spec.md` FR-15.
+- **Q-6 Export format → A.** One JSON document, Chotu's own shape,
+  schema-versioned. CSV and Drivvo-compatible exports can come later.
+- **Q-7 Import in M1 → no.** M1 ships export only. Import is M2, alongside the
+  legacy migration in `0002`. Applied to FR-16.3 and the scope list.
+- **Q-9 SQLite scope → development and test only.** Staging and production run
+  PostgreSQL. SQLite stays a supported adapter so the persistence boundary is
+  exercised in local work and CI, not as a deployment target. Applied to
+  `constitution.md` and `spec.md` non-functionals.
+- **Q-11 Headless password sign-in → allowed.** A non-browser client may hold
+  the opaque session credential returned by sign-in and send it as a bearer
+  value. The same request also sets the browser cookie. Applied to FR-2.1.
+- **Q-14 Rate limits → yes.** Sign-in, password-reset request, and invitation
+  acceptance are rate limited, per IP and per account. Concrete thresholds are
+  set during the plan. Draft starting point: sign-in 10/min/IP and 5/min/account,
+  reset request 3/hour/IP and 3/hour/account, invitation acceptance 10/hour/IP.
+- **Q-15 Restore → out of M1.** Restore tooling is `0002` or later. A documented
+  manual restore from the backup file is acceptable for M1. Applied to FR-18.2.
+- **Q-16 Admin bootstrap credential → the `scott` / `tiger` Easter egg.** If the
+  operator supplies no admin credentials, `bootstrap` seeds the first admin as
+  `scott@chotu.local` with password `tiger`, a nod to the classic Oracle demo
+  account. Guardrails: the account is flagged `must_change_password`; the API
+  refuses to serve non-development traffic while a default-credential admin
+  still has the unchanged password; `bootstrap` prints a clear warning. The
+  operator may instead pass an email and password, or take a one-time
+  set-password link. Applied to FR-1.5, FR-1.6, and `data-model.md`.
 
-Still to confirm — the integer scale:
+## Moved to research backlog
 
-- Distance: integer thousandths of a mile (`0.001 mi`). Covers trip-meter
-  granularity with headroom. Alternative: hundredths.
-- Volume: integer thousandths of a US gallon (`0.001 gal`). Matches a pump's
-  three-decimal display. Alternative: ten-thousandths.
-- Money: integer cents. No sub-cent case in M1.
+Non-blocking for M1. Tracked in `../research-backlog.md`.
 
-Confirm the scales, or pick alternatives.
-
-## Q-5 Conversion tolerance
-
-FR-15.4 wants a lossless round trip for display. Define the tolerance, for
-example "the displayed value with two decimals is identical after a create then
-read".
-
-## Q-6 Export format
-
-FR-16. Options:
-
-- **A.** One JSON document, Chotu's own shape, schema-versioned. (lean)
-- **B.** CSV per entity.
-- **C.** Drivvo-compatible CSV, to ease switching.
-
-Lean A for M1. B or C can come later. Confirm.
-
-## Q-7 Import round trip in M1
-
-FR-16.3. Is import required for the first M1 cut, or is export plus the
-reconciliation report enough, with import landing in `0002` alongside the legacy
-migration? Lean: export in `0001`, import in `0002`. Confirm.
-
-## Q-8 Token model
-
-FR-5. Several named tokens per user is the current draft. Confirm, or cap at one
-active token per user for M1.
-
-## Q-9 SQLite concurrency
-
-Multi-user now, but low volume and a single API process. SQLite in WAL mode
-serialises writes and should hold. Confirm no requirement forces PostgreSQL-only
-behaviour in M1, and set an expected concurrent-user ceiling for SQLite.
-
-## Q-10 Deployment target
-
-The constitution says one target, one production environment, chosen later.
-Name it before the plan: a small VM with a process manager, a container host, or
-a platform. Affects the bootstrap and config story.
-
-## Q-11 Headless password sign-in
-
-FR-2.1 returns an opaque session credential and also sets a cookie. Confirm a
-non-browser client (curl, an LLM chat client) may hold and send that session
-credential as a bearer value, or require such clients to use an API token only.
-
-## Q-12 Email delivery
-
-FR-3.5 email verification, FR-4.2 password reset, and FR-3.2 invitations may need
-outbound email. Options: require SMTP configuration, or return the link in the
-API response for a self-hoster to deliver by hand, or both by policy. Lean: both,
-default to returning the link when no SMTP is configured. Confirm.
-
-## Q-13 OIDC client secret storage
-
-`data-model.md` D-5. Encrypt provider secrets at rest with a deployment key, or
-store an environment-variable reference only. Lean: support both, prefer the
-environment reference for a single-provider self-host. Confirm.
-
-## Q-14 Rate-limit thresholds
-
-Non-functional "Auth hardening". Set concrete limits for sign-in,
-password-reset request, and invitation acceptance, and whether the limit is per
-IP, per account, or both.
-
-## Q-15 Deployment restore
-
-FR-18.2 defers restore tooling. Confirm restore is `0002` or later, and that a
-documented manual restore from the backup file is acceptable for M1.
-
-## Q-16 Admin bootstrap credential
-
-FR-1.5. Prefer the operator to pass an admin email and password to `bootstrap`,
-or to have `bootstrap` always print a one-time set-password link. Lean: accept
-either, print the link when no password is supplied. Confirm.
+- **Q-10 Deployment target → R-1.** Research deployment hardware and
+  virtualization options, including emerging AI-native application deployment.
+  The application must stay deployment-agnostic so a target can be swapped.
+- **Q-12 Transactional email → R-2.** Research how AI-native development
+  workflows send verification, reset, and invitation email. Find the
+  recommended pattern.
+- **Q-13 OIDC client secret storage → R-3.** Research secret storage for
+  self-hosted apps. Leaning: support both an encrypted-at-rest value and an
+  environment reference.
