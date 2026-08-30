@@ -8,16 +8,7 @@ Tracked in Linear: [Chotu](https://linear.app/onepeakstudios/project/chotu-d0a70
 
 ## Status
 
-Spec stage. No application code yet.
-
-- [specs/constitution.md](specs/constitution.md) — fixed decisions: mission,
-  stack, principles, contract enforcement.
-- [specs/0001-m1-trusted-fuel-logging/](specs/0001-m1-trusted-fuel-logging/) —
-  the first slice: an API-first, contract-enforced fuel-logging service.
-- [specs/README.md](specs/README.md) — how specs and the CI gates work.
-
-The HTTP API is the priority. A person operates Chotu with an LLM chat client or
-another HTTP client until the SPA is built.
+Early setup. No application code yet. See the Linear project for the plan.
 
 ## Getting started
 

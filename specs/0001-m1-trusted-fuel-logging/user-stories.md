@@ -284,6 +284,5 @@ These rewrites landed in the same change as this file.
 
 ## Open decisions
 
-The auth and multi-user additions raised new items. See `open-questions.md`
-Q-11 to Q-16: headless password sign-in, email delivery, OIDC secret storage,
-rate-limit thresholds, deployment restore timing, admin bootstrap credential.
+None. Every `0001` open question is resolved or moved to
+`../research-backlog.md`. See `open-questions.md`.
