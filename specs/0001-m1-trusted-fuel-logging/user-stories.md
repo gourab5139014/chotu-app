@@ -264,21 +264,26 @@ maintenance reminders.
 
 ---
 
-## Consequences for the other specs
+## Consequences for the other specs — applied
 
-Recorded here so the rewrites stay consistent.
+These rewrites landed in the same change as this file.
 
-- **Constitution.** Replace single-user framing with the actor model above.
-  Auth section gains OIDC Authorization Code, OIDC Device Grant, and per-user API
-  tokens. Add the clients list: API, `chotu` CLI, AI agents, SPA, third-party
-  HTTP clients.
-- **`data-model.md`.** `profile` becomes `user`. Add `identity` for external
-  logins, `invitation`, `session`, `password_reset`, `deployment_settings`, and
-  `audit_log`. `api_token`, `vehicle` gain `user_id`. Add a role attribute on
-  `user`. Ownership chain becomes fuel_entry to vehicle to user.
-- **`spec.md`.** FR-2 grows from one bootstrap token to full multi-user auth.
-  Add functional requirements for user management, registration policy, OIDC,
-  and the audit log. Acceptance criteria gain multi-user isolation and
-  admin-visibility limits.
-- **Linear.** Update the Chotu project and M1 milestone to record multi-user,
-  the admin role, and SSO, replacing the "single-user" text.
+- **Constitution.** Actors and Clients sections added. Single-user framing
+  removed. Auth decisions cover OIDC Authorization Code, per-user API tokens,
+  and server-side sessions. Principle 4 is per-user isolation.
+- **`data-model.md`.** `profile` is now `user`. Added `identity`, `invitation`,
+  `session`, `password_reset`, `deployment_settings`, `oidc_provider`, and
+  `audit_log`. `api_token` and `vehicle` carry `user_id`. `user` has a `role`.
+  Ownership chain is fuel_entry to vehicle to user. INV-6 to INV-9 added.
+- **`spec.md`.** FR-2 to FR-10 now cover sign-in and sessions, invitations,
+  password lifecycle, API tokens, OIDC, user profile and deletion, admin user
+  management, access policy, and the audit log. AC-7 to AC-9 cover isolation,
+  the last-admin guard, and audit completeness.
+- **Linear.** The Chotu project and the M1 milestone are updated to multi-user
+  plus admin plus OIDC, API-first, with the CLI at M1.5.
+
+## Open decisions
+
+The auth and multi-user additions raised new items. See `open-questions.md`
+Q-11 to Q-16: headless password sign-in, email delivery, OIDC secret storage,
+rate-limit thresholds, deployment restore timing, admin bootstrap credential.
