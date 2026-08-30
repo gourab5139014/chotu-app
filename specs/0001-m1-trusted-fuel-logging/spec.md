@@ -251,13 +251,19 @@ Each journey is a sequence of API calls now, and a screen flow later.
 
 ### FR-15 Units and currency
 
-- FR-15.1 The database stores canonical units only. Distance in metres. Volume
-  in millilitres. Money in minor currency units. See `data-model.md`.
-- FR-15.2 Requests may send values in the user's unit system. The API converts
-  on the way in and records the source unit on the entry for audit.
-- FR-15.3 Responses include both the canonical values and a display projection.
+- FR-15.1 Chotu targets the United States market. The database stores US
+  customary units as integers: distance in thousandths of a mile, volume in
+  thousandths of a US gallon, money in USD cents. See `data-model.md` D-1.
+- FR-15.2 A request may send values in the user's unit system, `imperial` or
+  `metric`. The API converts to the canonical units on the way in and records
+  the source unit system and the raw values on the entry for audit.
+- FR-15.3 Responses include both the canonical integer values and a display
+  projection in the user's unit system.
 - FR-15.4 Conversion is lossless enough that a round trip through the API
-  returns the same displayed value. *(Define the tolerance.)*
+  returns the same displayed value. A US user's values need no conversion.
+  *(Define the tolerance for metric input — see `open-questions.md` Q-5.)*
+- FR-15.5 USD is the only supported currency in M1. The user's `currency_code`
+  defaults to `USD`.
 
 ### FR-16 Export
 

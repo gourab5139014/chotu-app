@@ -14,6 +14,9 @@ Build an open-source, self-hostable replacement for Drivvo. It makes each user's
 vehicle fuel, service, and expense history trustworthy and easy to maintain.
 Personal-first: one person self-hosts and invites a small number of others.
 
+Target market: the United States. The database stores US customary units. A
+user may still view and enter data in metric.
+
 The first release succeeds when a person can:
 
 1. Add a vehicle.
@@ -222,8 +225,10 @@ first. The Linear milestone should be updated to record this order.
 - **Fuel entry** — one recorded fill-up. Also called a refueling.
 - **Full tank** — a fill-up that filled the tank. Needed for a valid economy
   calculation over the interval since the previous full tank.
-- **Canonical units** — the single internal representation. Input and display
-  convert to and from it. See `specs/0001-m1-trusted-fuel-logging/data-model.md`.
+- **Canonical units** — the single internal representation. US customary units
+  stored as integers, because the product targets the United States market.
+  Input and display convert to and from it. See
+  `specs/0001-m1-trusted-fuel-logging/data-model.md`.
 - **Bootstrap** — the startup step that creates or upgrades Chotu's own schema
   objects and validates the schema version.
 - **Adapter** — a database-engine-specific implementation of the persistence
