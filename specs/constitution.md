@@ -10,8 +10,9 @@ milestone **M1 — Trusted fuel logging**.
 
 ## Mission
 
-Build an open-source, personal-first replacement for Drivvo. It makes one
-vehicle's fuel, service, and expense history trustworthy and easy to maintain.
+Build an open-source, self-hostable replacement for Drivvo. It makes each user's
+vehicle fuel, service, and expense history trustworthy and easy to maintain.
+Personal-first: one person self-hosts and invites a small number of others.
 
 The first release succeeds when a person can:
 
@@ -20,24 +21,51 @@ The first release succeeds when a person can:
 3. Review, edit, or delete past entries.
 4. See accurate fuel cost and efficiency history.
 
+## Actors
+
+- **User** — an account holder. Signs in, manages only their own vehicles and
+  fuel entries. No cross-user vehicle sharing in this scope.
+- **Administrator** — a user account with deployment-management rights. Still a
+  normal user for their own vehicles. Can read accounts and data-integrity
+  findings. **Cannot** read a user's fuel entries.
+- **Deployment** — one running Chotu instance with its own database and its own
+  set of users. Multiple users per deployment. Multiple vehicles per user.
+
+## Clients
+
+The API is the product. Every client is equal and talks to the API over HTTP.
+
+1. **HTTP API** — the primary surface for the first release.
+2. **`chotu` CLI** — first-party, ships in M1.5.
+3. **AI agents** — Claude Code or similar, driving the API or the CLI.
+4. **Web SPA** — built after the API workflow runs in production.
+5. **Third-party HTTP clients** — anything reading `openapi.yaml`.
+
 ## Product boundary
 
 **In scope for the first release**
 
-- Single-user authentication and profile.
-- Vehicle creation and editing.
+- Multi-user authentication with an administrator role and per-user data
+  isolation.
+- Sign-in with email and password, or with an external identity provider.
+- Invitations, password reset, and self-service account deletion.
+- Admin user-management and per-deployment access policy.
+- An audit log of admin actions.
+- Vehicle creation and editing. Multiple vehicles per user.
 - Manual fuel-entry logging: date, odometer, volume, total cost, notes.
 - Entry history with edit and delete.
-- Basic metrics: cost over time, fuel economy, recent activity.
-- Consistent unit conversion and a canonical currency setting.
-- Data export and basic reconciliation checks.
+- Consistent unit conversion and a per-user currency setting.
+- Per-user data export and reconciliation checks.
 
 **Deferred until the core loop is validated**
 
 - Receipt scanning, OCR, and AI extraction.
 - Service and other expense tracking.
-- Multi-user, multi-tenant, or shared-vehicle support.
-- MCP, voice input, external integrations, and agent workflows.
+- Fuel analytics beyond entry capture and reconciliation. Cost, consumption,
+  and efficiency views are delivery phase 3.
+- Cross-user or shared-vehicle access.
+- SAML and other non-OIDC single sign-on.
+- MCP server and voice input.
 - Multiple deployment targets, staging environments, and complex CI/CD.
 
 ## Technology decisions
@@ -49,10 +77,14 @@ The first release succeeds when a person can:
 | Package manager | pnpm workspace | Clean module boundaries. Room for more packages later. |
 | API service | Hono | Small, portable, runs on Node now and elsewhere later. |
 | API contract | OpenAPI 3.1, authored with `@hono/zod-openapi` | One Zod schema per payload. The spec is generated from code, so they cannot drift. A published OpenAPI document also lets an LLM chat client drive the API. |
-| Auth (first release) | Static bearer token, issued by the bootstrap step | Single user. A token suits an LLM chat client or any HTTP client. Session and cookie auth wait for the SPA. |
+| Auth: identity | OIDC — Authorization Code with PKCE for browsers, Device Authorization Grant for the CLI and agents. Plus email and password. | Reuse existing identities and support browserless clients. No SAML in this scope. |
+| Auth: API credential | Per-user API token. Bearer only. Stored as a hash. | A token suits a script, the CLI, or an LLM chat client. The API never sees a password after sign-in. |
+| Auth: sessions | Server-side sessions for browser clients. Opaque session id in an HttpOnly cookie. | Simple to revoke. No token parsing on the client. |
+| Registration | Invite-only by default. Open sign-up and SSO auto-provisioning are per-deployment admin toggles. | Safe default for a self-hosted instance with no extra anti-abuse work. |
 | Frontend | Vite + React, mobile-first SPA | Separate deployable. Talks to the API only over HTTP. Built after the API workflow runs in production. |
+| CLI | `chotu`, ships in M1.5 | First-party client. Authenticates with an API token or the OIDC Device Grant. Machine-readable output. |
 | Persistence | Drizzle ORM | SQL-first. Types are inferred with no codegen step. Supports the launch adapters. |
-| Database adapters at launch | PostgreSQL and SQLite | SQLite for local work and single-user self-host. PostgreSQL for real deployments. Two adapters prove the portability boundary from day one. |
+| Database adapters at launch | PostgreSQL and SQLite | SQLite for local work and a small self-host. PostgreSQL for larger deployments. Two adapters prove the portability boundary from day one. |
 | Migrations | `drizzle-kit` | One change per migration file. `drizzle-kit check` detects drift. |
 | Tests | Vitest (unit and contract), Playwright (end-to-end) | Contract tests run against every adapter. |
 | Deployment | One target, one production environment | Add infrastructure only when usage or collaborators require it. |
@@ -65,10 +97,12 @@ chotu-app/
     api/          Hono service, route handlers, OpenAPI, persistence layer
       src/
         domain/       canonical domain model and typed domain functions
+        auth/         sessions, OIDC, API tokens, password hashing
         db/           Drizzle schema, adapters, migrations, bootstrap
         routes/       HTTP routes; zod-openapi definitions
         contract/     generated OpenAPI document and generated types
-    web/          Vite + React SPA
+    cli/          `chotu` CLI (M1.5), consumes openapi.yaml
+    web/          Vite + React SPA (after the API is in production)
       src/
         api/          generated client and types from openapi.yaml
   specs/          this directory
@@ -81,24 +115,29 @@ chotu-app/
    person drives it with an LLM chat client or any HTTP client, guided by the
    OpenAPI document. The SPA is built only after the API workflow runs in
    production. Every API capability must be complete and usable without a UI.
-2. **One application and API boundary.** The SPA, and any other client, call the
-   API over HTTP only. No client reaches a database.
-3. **One canonical domain model.** Profile, vehicle, and fuel entry are defined
+2. **One application and API boundary.** Every client — CLI, agent, SPA,
+   third-party — calls the API over HTTP only. No client reaches a database.
+   No capability exists in one client and not the API.
+3. **One canonical domain model.** User, vehicle, and fuel entry are defined
    once. Domain and persistence functions are typed.
-4. **Database-agnostic application code.** All database-specific code lives in
+4. **Per-user isolation.** Every query for vehicle or fuel-entry data is scoped
+   to the calling user. The database enforces the ownership chain. An admin role
+   grants deployment management, not read access to another user's fuel entries.
+5. **Database-agnostic application code.** All database-specific code lives in
    the persistence layer behind a stable contract. Add engines as tested
    adapters, never as branches in application code.
-5. **Self-bootstrapping schema.** A developer supplies a database connection and
+6. **Self-bootstrapping schema.** A developer supplies a database connection and
    credentials that can bootstrap the schema. On startup or an explicit command,
    Chotu creates and migrates its own objects, validates the schema version,
    then serves requests. Chotu never creates or alters objects it does not own.
    Insufficient permissions stop startup with an actionable error.
-6. **Constraints live in the database.** Required fields, ownership, odometer
+7. **Constraints live in the database.** Required fields, ownership, odometer
    validity, and fuel-entry consistency are enforced by the schema, not only by
    application validation.
-7. **Least privilege.** Routine application flows use a low-privilege role.
-   Bootstrap uses a separate, documented, higher-privilege role.
-8. **Reuse is selective.** Carry forward Drivvo import and parsing, metrics and
+8. **Least privilege.** Routine application flows use a low-privilege database
+   role. Bootstrap uses a separate, documented, higher-privilege role. Admin API
+   endpoints require the admin role, not only a valid credential.
+9. **Reuse is selective.** Carry forward Drivvo import and parsing, metrics and
    unit conversion, migration fixtures, and analytics queries. Do not carry
    forward duplicated CRUD paths, legacy schemas, or unreviewed automation.
 
@@ -129,10 +168,13 @@ From the Linear project. Each phase is a vertical slice with an exit criterion.
    Add validation, ownership rules, fixtures, and reconciliation checks.
    *Exit:* a clean local dataset imports or enters with no duplicate, orphaned,
    or invalid records.
-2. **Core logging loop.** Sign-in and profile. Vehicle create, view, edit,
-   archive. Manual fuel entry with validation and metric/imperial support.
-   History, edit, delete. *Exit:* the add-vehicle then add-fill-up then
-   correct-entry journey works on a phone-sized screen.
+2. **Core logging loop.** Multi-user auth: registration by invitation, sign-in
+   with password or OIDC, password reset, user profile. Admin user-management
+   and access policy. Vehicle create, view, edit, archive. Manual fuel entry
+   with validation and metric/imperial support. History, edit, delete. Per-user
+   isolation throughout. *Exit:* the add-vehicle then add-fill-up then
+   correct-entry journey works for a signed-in user, over the API first and on a
+   phone-sized screen later.
 3. **Trustworthy insights.** Recent activity and fuel-history views. Consistent
    cost, consumption, and efficiency. Explicit handling of incomplete or
    first-fill-up data. Export and reconciliation checks. *Exit:* metrics match a
@@ -166,8 +208,17 @@ first. The Linear milestone should be updated to record this order.
 
 ## Glossary
 
-- **Profile** — the single account holder. Holds unit and currency preferences.
-- **Vehicle** — one car owned by the profile. Fuel entries attach to it.
+- **User** — an account holder. Holds unit, currency, and time-zone
+  preferences. Owns vehicles and fuel entries.
+- **Administrator** — a user with deployment-management rights. See Actors.
+- **Deployment** — one running Chotu instance, one database, one set of users.
+- **Identity** — an external login linked to a user, from an OIDC provider.
+- **Invitation** — a single-use link that lets one person create an account on
+  an invite-only deployment.
+- **Session** — server-side state for a signed-in browser client, keyed by an
+  opaque id in an HttpOnly cookie.
+- **API token** — a per-user bearer credential for scripts, the CLI, and agents.
+- **Vehicle** — one car owned by a user. Fuel entries attach to it.
 - **Fuel entry** — one recorded fill-up. Also called a refueling.
 - **Full tank** — a fill-up that filled the tank. Needed for a valid economy
   calculation over the interval since the previous full tank.
