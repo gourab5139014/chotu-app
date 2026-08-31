@@ -8,9 +8,12 @@ export default tseslint.config(
   {
     ignores: [
       "**/dist/**",
+      "**/dist-test/**",
       "**/node_modules/**",
       "**/*.d.ts",
       "packages/*/src/db/migrations/**",
+      // Root tooling config, outside every package tsconfig.
+      "vitest.config.ts",
     ],
   },
   js.configs.recommended,

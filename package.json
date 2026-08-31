@@ -10,7 +10,7 @@
   },
   "packageManager": "pnpm@11.24.0",
   "scripts": {
-    "typecheck": "tsc --build --verbose",
+    "typecheck": "pnpm -r run typecheck",
     "lint": "eslint .",
     "test": "vitest run",
     "db:check": "echo \"no schema yet\"",
@@ -22,6 +22,7 @@
     "eslint": "9.20.1",
     "globals": "15.15.0",
     "typescript": "5.7.3",
-    "typescript-eslint": "8.24.0"
+    "typescript-eslint": "8.24.0",
+    "vitest": "3.0.5"
   }
 }

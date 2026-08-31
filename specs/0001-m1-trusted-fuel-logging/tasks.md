@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T1.3
-- **Next task:** T1.4
+- **Last completed task:** T1.4
+- **Next task:** T1.5
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -45,7 +45,7 @@ pause with almost no rework.
 - [x] **T1.3** ESLint flat config with `typescript-eslint`; a local rule module
   stub `no-unscoped-entity-query` (reports nothing yet).
   *done when:* `pnpm -w run lint` passes.
-- [ ] **T1.4** Vitest workspace config + one placeholder test in `packages/api`.
+- [x] **T1.4** Vitest workspace config + one placeholder test in `packages/api`.
   *done when:* `pnpm -w run test` green.
 - [ ] **T1.5** `src/env.ts`: zod schema for every var in `plan.md` section 16;
   `.env.example` regenerated from it.
