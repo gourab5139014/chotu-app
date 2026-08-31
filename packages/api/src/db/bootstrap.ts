@@ -14,7 +14,6 @@ import {
 import { newId } from "../domain/id";
 
 import { makeRepos } from "./repositories";
-import { mappers } from "./schema/mappers";
 import type { DeploymentSettingsRow } from "./schema/types";
 import { CURRENT_SCHEMA_VERSION, isSchemaSupported } from "./schema/version";
 import { sqlQuery, sqlRun, type DbHandle } from "./index";
@@ -173,19 +172,13 @@ export async function writeSchemaMeta(
   handle: DbHandle,
   build: string,
 ): Promise<void> {
-  const row = mappers.schemaMeta.toRow(
-    {
-      id: "singleton",
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      appliedAt: new Date(),
-      chotuBuild: build,
-    },
-    handle.dialect,
-  );
+  // ISO string for both dialects: PostgreSQL casts it to timestamptz, SQLite
+  // stores the text. (A Date object cannot be a raw postgres.js bind param.)
+  const appliedAt = new Date().toISOString();
   await sqlRun(
     handle,
     sql`insert into schema_meta (id, schema_version, applied_at, chotu_build)
-        values ('singleton', ${row.schemaVersion as number}, ${row.appliedAt as string | Date}, ${row.chotuBuild as string})
+        values ('singleton', ${CURRENT_SCHEMA_VERSION}, ${appliedAt}, ${build})
         on conflict (id) do update set
           schema_version = excluded.schema_version,
           applied_at = excluded.applied_at,
