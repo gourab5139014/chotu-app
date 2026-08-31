@@ -40,7 +40,11 @@ export default tseslint.config(
   },
   {
     // The process entry and the CLI print to stdout before the logger exists.
-    files: ["packages/api/src/index.ts", "packages/api/src/bin/**/*.ts"],
+    files: [
+      "packages/api/src/index.ts",
+      "packages/api/src/cli.ts",
+      "packages/api/src/bin/**/*.ts",
+    ],
     rules: { "no-console": "off" },
   },
   {

@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T3.4
-- **Next task:** T3.5
+- **Last completed task:** T3.5 (slice 3 complete)
+- **Next task:** T4.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -119,7 +119,7 @@ pause with almost no rework.
   `CHOTU_ENV=production` (FR-1.10); refuse to start in production while a seeded
   default-password admin exists (FR-1.6).
   *done when:* both refusals are covered by tests (AC-12) and print why.
-- [ ] **T3.5** `chotu token issue` / `token revoke`.
+- [x] **T3.5** `chotu token issue` / `token revoke`.
   *done when:* issue prints a `cht_` token once; revoke marks it; a CLI test
   covers both.
 
