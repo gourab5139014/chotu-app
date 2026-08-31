@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T1.7
-- **Next task:** T1.8
+- **Last completed task:** T1.8 (slice 1 complete)
+- **Next task:** T2.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -58,7 +58,7 @@ pause with almost no rework.
   section-15 jobs. Drizzle codegen/drift jobs active; OpenAPI jobs present but
   skip when `openapi.yaml` is absent.
   *done when:* CI is green on the push.
-- [ ] **T1.8** `pnpm -w run verify` script = typecheck + lint + both
+- [x] **T1.8** `pnpm -w run verify` script = typecheck + lint + both
   `drizzle-kit check` + test. Add `pnpm -w run openapi:write` placeholder.
   *done when:* `pnpm -w run verify` green.
 
