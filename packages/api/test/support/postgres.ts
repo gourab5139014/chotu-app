@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 
-import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import postgres from "postgres";
 
 import { makePostgres, type PostgresHandle } from "../../src/db/adapters/postgres";
 
@@ -15,24 +15,25 @@ export interface MigratedPostgres {
 }
 
 /**
- * A migrated PostgreSQL database in a throwaway `chotu` schema. Requires
- * `DATABASE_URL` to point at a reachable server (the CI postgres matrix leg).
+ * A migrated PostgreSQL database for the round-trip and repository tests.
+ * `DATABASE_URL` must point at a throwaway server (the CI postgres matrix leg).
+ * The `public` schema is reset and re-migrated on every open, so tests do not
+ * see each other's rows. The runtime adapter's own `search_path` behaviour
+ * (FR-1.9) is covered by `adapters.test.ts`.
  */
-export async function openMigratedPostgres(url: string): Promise<MigratedPostgres> {
-  const bootstrap = makePostgres(url, { schemaName: "public" });
-  await bootstrap.client`drop schema if exists chotu cascade`;
-  await bootstrap.client`create schema chotu`;
-  await bootstrap.close();
+export async function openMigratedPostgres(
+  url: string,
+): Promise<MigratedPostgres> {
+  const admin = postgres(url, { max: 1, onnotice: () => undefined });
+  await admin`drop schema if exists public cascade`;
+  await admin`create schema public`;
+  await admin.end();
 
-  const handle = makePostgres(url);
-  await handle.db.execute(sql`set search_path to chotu`);
-  await migrate(handle.db, { migrationsFolder, migrationsSchema: "chotu" });
+  const handle = makePostgres(url, { schemaName: "public" });
+  await migrate(handle.db, { migrationsFolder });
 
   return {
     handle,
-    cleanup: async () => {
-      await handle.client`drop schema if exists chotu cascade`;
-      await handle.close();
-    },
+    cleanup: () => handle.close(),
   };
 }

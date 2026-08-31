@@ -147,7 +147,7 @@ describe("row mappers round-trip (SQLite)", () => {
     };
   });
 
-  afterAll(() => ctx.cleanup());
+  afterAll(() => ctx?.cleanup());
 
   it("every slice-2 table round-trips through the mappers", async () => {
     await runRoundTrips(ctx);
@@ -170,7 +170,7 @@ describe.skipIf(!hasPg)("row mappers round-trip (PostgreSQL)", () => {
     };
   });
 
-  afterAll(() => ctx.cleanup());
+  afterAll(() => ctx?.cleanup());
 
   it("every slice-2 table round-trips through the mappers", async () => {
     await runRoundTrips(ctx);
