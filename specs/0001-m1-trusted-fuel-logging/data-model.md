@@ -163,13 +163,16 @@ An external OIDC login linked to a user. A user may have several.
 |---|---|---|---|
 | `id` | uuid | no | primary key |
 | `user_id` | uuid | no | foreign key to `user.id`, on delete cascade |
-| `provider_key` | text | no | foreign key to `oidc_provider.key` |
+| `provider_key` | text | no | foreign key to `oidc_provider.key`, on delete restrict |
 | `subject` | text | no | the `sub` claim from the provider |
 | `email_at_link` | text | yes | email seen when linked, for audit |
 | `created_at` | timestamptz | no | |
 | `last_login_at` | timestamptz | yes | |
 
-Constraints: unique `(provider_key, subject)`.
+Constraints: unique `(provider_key, subject)`. `on delete restrict` on the
+provider FK: a provider with linked identities cannot be deleted unless the
+admin passes a force flag, which unlinks those identities first and then applies
+the FR-6.3 "at least one sign-in method" check per affected user.
 
 ### invitation
 
@@ -222,8 +225,11 @@ set-password link (FR-1.5).
 | `used_at` | timestamptz | yes | null means unused |
 | `created_at` | timestamptz | no | |
 
-Constraints: `purpose in ('reset','verify','set_password')`. At most one
-unused, unexpired row per `(user_id, purpose)`.
+Constraints: `purpose in ('reset','verify','set_password')`. Partial unique
+index on `(user_id, purpose)` where `used_at IS NULL` — at most one **unused**
+row per purpose per user; issuing a new one first deletes any prior unused row.
+Expiry is not part of the index; the application treats an expired row as
+invalid and a startup sweep plus opportunistic deletes clear old rows.
 
 ### oidc_login
 
@@ -234,8 +240,8 @@ multi-instance. FR-6.2.
 | Field | Type | Null | Notes |
 |---|---|---|---|
 | `id` | uuid | no | primary key |
-| `provider_key` | text | no | foreign key to `oidc_provider.key` |
-| `state_hash` | text | no | SHA-256 of the `state` value, unique |
+| `provider_key` | text | no | foreign key to `oidc_provider.key`, on delete cascade |
+| `state_hash` | text | no | SHA-256 of the `state` value, unique; callback hashes the incoming `state` and looks up by this |
 | `code_verifier` | text | no | PKCE verifier for this attempt |
 | `nonce` | text | yes | OIDC nonce for this attempt |
 | `redirect_to` | text | yes | where to send the client after sign-in |
@@ -334,12 +340,14 @@ One row. Bootstrap and version state.
 
 | Field | Type | Null | Notes |
 |---|---|---|---|
+| `id` | text | no | fixed value `singleton`, primary key |
 | `schema_version` | integer | no | current applied version |
 | `applied_at` | timestamptz | no | |
 | `chotu_build` | text | no | build that applied it |
 
-Drizzle's own migration journal table sits alongside this. `schema_meta` is the
-value FR-1.3 validates.
+Single-row guard, like `deployment_settings`. Drizzle's own migration journal
+table sits alongside this. `schema_meta.schema_version` is the value FR-1.3
+validates against `SUPPORTED_SCHEMA_RANGE`.
 
 ## Bootstrap output
 
@@ -454,10 +462,11 @@ Chotu owns one schema, default name `chotu`. Two roles.
 
 - **Bootstrap role.** `CONNECT` on the database; `CREATE` on the database (to
   create the schema on a first run) or `CREATE` on the existing `chotu` schema;
-  `USAGE, CREATE` on the `chotu` schema; ability to `CREATE TABLE`, `CREATE
-  INDEX`, `ALTER TABLE`, `CREATE TYPE`, and `INSERT/UPDATE` on `schema_meta` and
-  the Drizzle migration journal table. No privilege on any schema other than
-  `chotu` and `public` for the extension check.
+  `USAGE, CREATE` on the `chotu` schema; DDL (`CREATE TABLE`, `CREATE INDEX`,
+  `ALTER TABLE`, `CREATE TYPE`); and full DML (`SELECT, INSERT, UPDATE, DELETE`)
+  on every `chotu` table, because bootstrap also seeds `deployment_settings`,
+  the first `user`, and an `api_token` on this connection. No privilege on any
+  schema other than `chotu` and `public` for the extension check.
 - **API role.** `CONNECT`; `USAGE` on the `chotu` schema; `SELECT, INSERT,
   UPDATE, DELETE` on every Chotu table **except** `audit_log`, where it has
   `INSERT, SELECT` only. No `CREATE`, `ALTER`, `DROP`, `TRUNCATE`. No access to

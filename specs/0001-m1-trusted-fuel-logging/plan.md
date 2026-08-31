@@ -179,12 +179,13 @@ adapter or an in-memory fake.
 `uow.run(async (tx) => { ... })` runs the callback in one transaction and
 commits on resolve, rolls back on throw. **Rule:** the callback does only
 database work and pure computation — no network, no timers, no `await` on
-non-DB promises — because the SQLite adapter wraps `better-sqlite3`, which is
-synchronous and rejects a transaction body that yields to the event loop for
-real async work. `tx.lockVehicle(id)` and `tx.lockSettings()` take the row lock
-for the current transaction: `SELECT ... FOR UPDATE` on Postgres, and on SQLite
-the transaction is opened with `BEGIN IMMEDIATE` so the whole check-and-write
-holds the database write lock. The `audit_log` insert for an action runs inside
+non-DB promises. `better-sqlite3` rejects a promise-returning transaction
+callback outright, so the SQLite adapter does **not** use Drizzle's native
+`transaction()` wrapper for the locking path; it brackets the work with explicit
+`BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` statements and a synchronous body.
+`tx.lockVehicle(id)` and `tx.lockSettings()` take the row lock for the current
+transaction: `SELECT ... FOR UPDATE` on Postgres; on SQLite the `BEGIN
+IMMEDIATE` already holds the database write lock for the whole check-and-write. The `audit_log` insert for an action runs inside
 the same `uow.run` as the mutation, so the pair commits or rolls back together
 (AC-9).
 
@@ -292,8 +293,10 @@ main transaction.
 ### Passwords (FR-4)
 `@node-rs/argon2` Argon2id, parameters fixed in `auth/password.ts`. Reset,
 verify, and set-password tokens all live in `user_token` (`purpose`), 256-bit
-random, SHA-256 at rest, short TTL, single use, one unused row per
-`(user_id, purpose)`. `must_change_password` gate is middleware (FR-4.5).
+random, SHA-256 at rest, short TTL, single use. A partial unique index on
+`(user_id, purpose) WHERE used_at IS NULL` keeps at most one unused token per
+purpose per user; issuing a new one deletes the prior unused row. Expiry is
+enforced in the application. `must_change_password` gate is middleware (FR-4.5).
 Change-password accepts a session or a token so the seeded admin can clear it
 (FR-4.1).
 
@@ -302,18 +305,30 @@ Change-password accepts a session or a token so the seeded admin can clear it
 `issuer_url`, Authorization Code + PKCE. Routes `GET /auth/oidc/:key/start` and
 `GET /auth/oidc/:key/callback`, both in the FR-2.2 unauth list. `start` creates
 an `oidc_login` row (`state_hash`, `code_verifier`, `nonce`, `redirect_to`,
-short `expires_at`) and redirects. `callback` looks up by `state`, validates the
-token and nonce, matches or creates `identity` by `(provider_key, sub)`,
-enforces `allowed_email_domains` / `allowed_groups`, auto-provisions when
-enabled and policy is `sso_auto`, marks the `oidc_login` consumed, and starts a
-session. Client secret is write-only over the API; stored per R-3 (plan
-default: environment reference; DB-encrypted value supported later). Tests use
-the mock issuer (section 14). The Device Authorization Grant is M1.5.
+short `expires_at`) and redirects. The random `state` is the login-CSRF binding:
+`callback` hashes the incoming `state`, looks up by `state_hash`, rejects an
+unknown, expired, or already-consumed row, validates the token and nonce,
+matches or creates `identity` by `(provider_key, sub)`, enforces
+`allowed_email_domains` / `allowed_groups`, auto-provisions when enabled and
+policy is `sso_auto`, marks the `oidc_login` consumed, and starts a session.
+Deleting a provider that has linked `identity` rows is rejected
+(`provider_in_use`) unless the admin passes `force`, which unlinks them first
+and then re-checks FR-6.3 per affected user; `oidc_login` rows cascade.
+Client secret is write-only over the API; stored per R-3 (plan default:
+environment reference; DB-encrypted value supported later). Tests use the mock
+issuer (section 14). The Device Authorization Grant is M1.5.
 
 ### Rate limiting (FR-2.6, NFR)
 Token-bucket middleware on sign-in, reset request, invite accept. Keyed per IP
-and per account. Draft limits from the spec NFR, read from config. `429` +
-`Retry-After`.
+and per account. The client IP is the socket peer address unless
+`TRUSTED_PROXY=true`, in which case the last hop of `X-Forwarded-For` is used;
+never trust the header by default. Draft limits from the spec NFR, read from
+config. `429` + `Retry-After`.
+
+### Expired-row cleanup
+`session`, `user_token`, and `oidc_login` accumulate dead rows. A sweep deletes
+expired rows on startup and on a cheap interval; each lookup also deletes the
+row it finds expired. No external scheduler.
 
 ## 9. Reconciliation
 
@@ -388,9 +403,15 @@ observability). No telemetry backend in M1.
 
 ## 15. CI pipeline
 
-One workflow. Jobs map to the `specs/README.md` gates. All blocking **from
-slice 4 on**; gates 1–3 are non-blocking before `openapi.yaml` exists (slices
-1–3).
+One workflow. Jobs map to the `specs/README.md` gates. Timing:
+
+- The **Drizzle halves** of gate 3 (per-dialect `generate` then diff) and gate 4
+  (`drizzle-kit check` per dialect) are blocking **from slice 2**, when the
+  first schema lands.
+- The **OpenAPI halves** — gate 1 (Spectral), gate 2 (`oasdiff`), and the
+  `openapi.yaml` diff in gate 3 — are no-op until `openapi.yaml` first exists in
+  **slice 4**, then blocking.
+- Gates 5–7 grow with the code and are blocking throughout.
 
 1. `spec-lint` — Spectral on `openapi.yaml`.
 2. `breaking-change` — `oasdiff` base vs head; fail on a breaking change unless
@@ -420,7 +441,8 @@ slice 1. Old-name mapping so nothing is lost:
 | `DATABASE_BOOTSTRAP_URL` | same | bootstrap connection, DDL role |
 | `PORT` | same | HTTP port |
 | `CHOTU_BASE_URL` | `PUBLIC_APP_URL` | public base URL, for OIDC redirect URIs and links |
-| `SESSION_SIGNING_KEY` | `APP_SECRET` | key for session cookie and `oidc_login` cookie integrity |
+| `SESSION_SIGNING_KEY` | `APP_SECRET` | HMAC key for the session cookie. The OIDC flow uses the server-side `oidc_login` row, so its `state` is the CSRF binding and needs no cookie |
+| `TRUSTED_PROXY` | *(new, optional)* | `true` to read the client IP from the last `X-Forwarded-For` hop for rate limiting |
 | `CORS_ALLOWED_ORIGINS` | same | browser origins; empty in an API-only deployment |
 | `RATE_LIMIT_*` | *(new, optional)* | overrides for the draft thresholds |
 | `EMAIL_*` | *(new, optional)* | when unset, links are returned in the API response (R-2 interim) |
@@ -447,9 +469,10 @@ Postgres is provided for parity testing, not required to run the app.
 
 ## 18. Build sequence
 
-Each step ends green on the pipeline (gates 1–3 non-blocking until step 4). This
-feeds `tasks.md`, which decomposes each step into checkbox tasks with a `done
-when` command.
+Each step ends green on the pipeline. The Drizzle codegen and drift gates block
+from step 2; the OpenAPI gates (Spectral, oasdiff, `openapi.yaml` diff) are
+no-op until step 4 (section 15). This feeds `tasks.md`, which decomposes each
+step into checkbox tasks with a `done when` command.
 
 1. **Workspace + skeleton.** pnpm workspace, `packages/api`, tsconfig strict,
    ESLint flat config with the isolation local rule stub, vitest workspace, both
@@ -467,8 +490,8 @@ when` command.
 4. **Cross-cutting middleware + auth core.** request-id, logging+redaction,
    cors, error model, rate-limit. Password sign-in, sessions (`chs_`),
    `must_change_password` gate, API tokens (`cht_`), sign-out, deactivated-user
-   rejection. The OpenAPI pipeline and the codegen-clean gate go live and become
-   blocking here.
+   rejection. `openapi.yaml` is first written here, so the Spectral, oasdiff,
+   and `openapi.yaml`-diff gates go live and become blocking from this step.
 5a. **User profile.** Profile get/update, self-delete. `audit_log` table write
     path and the audit-delta test helper. AC-7 isolation baseline for profile.
 5b. **Admin read.** Admin list users, get one user detail.
