@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, "build/**"]
 
 # Least privilege. No job here needs write access or repository secrets.
 permissions:
@@ -13,7 +13,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: "20"
+
 jobs:
+  # Gate 0 — secret scan (kept from the initial hardening).
   secret-scan:
     runs-on: ubuntu-latest
     steps:
@@ -25,41 +29,159 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-test:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      has_openapi: ${{ steps.probe.outputs.has_openapi }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: probe
+        run: |
+          if [ -f openapi.yaml ]; then
+            echo "has_openapi=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_openapi=false" >> "$GITHUB_OUTPUT"
+            echo "openapi.yaml not present yet — OpenAPI gates are no-op (plan section 15)."
+          fi
+
+  # Gate 5 — typecheck.
+  typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
 
-      - name: Detect Node project
-        id: detect
+  # Lint (typescript-eslint + the local isolation rule).
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+
+  # Gate 4 — schema drift, per dialect.
+  schema-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run db:check
+
+  # Gate 3 — generated artifacts are current.
+  codegen-clean:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Drizzle migrations are current (both dialects)
         run: |
-          if [ -f package.json ]; then
-            echo "node=true" >> "$GITHUB_OUTPUT"
+          pnpm --filter @chotu/api run db:generate
+          git diff --exit-code packages/api/src/db/migrations
+      - name: OpenAPI document is current
+        if: needs.setup.outputs.has_openapi == 'true'
+        run: |
+          pnpm run openapi:write
+          git diff --exit-code openapi.yaml
+
+  # Gate 1 — spec lint (no-op until openapi.yaml exists).
+  spec-lint:
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.has_openapi == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dlx @stoplight/spectral-cli lint openapi.yaml
+
+  # Gate 2 — breaking-change check (no-op until openapi.yaml exists).
+  breaking-change:
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.has_openapi == 'true' && github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: oasdiff
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          if git cat-file -e "$BASE:openapi.yaml" 2>/dev/null; then
+            git show "$BASE:openapi.yaml" > /tmp/base-openapi.yaml
           else
-            echo "node=false" >> "$GITHUB_OUTPUT"
-            echo "No package.json yet. Skipping install, lint, and test."
+            echo "No base openapi.yaml — nothing to diff."
+            exit 0
+          fi
+          docker run --rm -v /tmp:/tmp -v "$PWD":/repo tufin/oasdiff:latest \
+            breaking /tmp/base-openapi.yaml /repo/openapi.yaml --fail-on ERR \
+            || BREAKING=1
+          if [ "${BREAKING:-0}" = "1" ]; then
+            if git log -1 --format=%B "${{ github.event.pull_request.head.sha }}" | grep -q '^BREAKING-OPENAPI:'; then
+              echo "Breaking change acknowledged by BREAKING-OPENAPI: trailer."
+            else
+              echo "::error::Breaking OpenAPI change without a BREAKING-OPENAPI: commit trailer."
+              exit 1
+            fi
           fi
 
-      - name: Set up Node
-        if: steps.detect.outputs.node == 'true'
-        uses: actions/setup-node@v4
+  # Gates 6 and 7 — contract, isolation, unit, repository, journey.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: chotu_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CHOTU_ENV: development
+      SESSION_SIGNING_KEY: ci-signing-key-not-a-secret-0000
+      DATABASE_URL: ${{ matrix.adapter == 'postgres' && 'postgres://postgres:postgres@localhost:5432/chotu_test' || 'file:./chotu-ci.db' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-
-      - name: Install
-        if: steps.detect.outputs.node == 'true'
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
-
-      - name: Lint
-        if: steps.detect.outputs.node == 'true'
-        run: npm run lint --if-present
-
-      - name: Typecheck
-        if: steps.detect.outputs.node == 'true'
-        run: npm run typecheck --if-present
-
-      - name: Test
-        if: steps.detect.outputs.node == 'true'
-        run: npm test --if-present
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test
