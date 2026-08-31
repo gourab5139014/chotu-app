@@ -11,7 +11,6 @@ function main(): void {
   const port = Number.parseInt(process.env["PORT"] ?? "8787", 10);
 
   serve({ fetch: app.fetch, port }, (info) => {
-    // eslint-disable-next-line no-console -- startup line, before the logger exists
     console.log(`chotu api listening on :${info.port}`);
   });
 }
