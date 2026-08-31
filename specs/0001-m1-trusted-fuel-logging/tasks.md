@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T5a.3
-- **Next task:** T5a.4
+- **Last completed task:** T5a.4 (slice 5a complete)
+- **Next task:** T5b.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -173,7 +173,7 @@ pause with almost no rework.
   system, time zone; currency is read-only USD). No entry rewrite on a unit
   change (FR-7.1, FR-7.2).
   *done when:* contract tests pass on both adapters.
-- [ ] **T5a.4** Self-delete (FR-7.3): removes the user's vehicles, entries,
+- [x] **T5a.4** Self-delete (FR-7.3): removes the user's vehicles, entries,
   tokens, sessions, identities; audit row without personal content; blocked for
   the last active admin (FR-7.4).
   *done when:* cascade verified; last-admin self-delete rejected.

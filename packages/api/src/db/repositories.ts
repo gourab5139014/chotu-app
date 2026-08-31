@@ -303,6 +303,30 @@ export function makeRepos(handle: DbHandle): Repos {
   };
 }
 
+/**
+ * Count `role = 'admin' AND status = 'active'` users on an open transaction.
+ * Use it under `tx.lockSettings` for the INV-6 / FR-7.4 last-admin guard.
+ * Synchronous on SQLite, a promise on PostgreSQL.
+ */
+export function countActiveAdminsInTx(tx: Tx): number | Promise<number> {
+  const q = sql`select count(*) as n from "user" where role = 'admin' and status = 'active'`;
+  if (tx.dialect === "postgres") {
+    return tx.db.execute(q).then((rows) => Number((rows[0] as any)?.n ?? 0));
+  }
+  return Number((tx.db.all(q)[0] as any)?.n ?? 0);
+}
+
+/** Delete a user row on an open transaction. FK cascades take the dependents. */
+export function deleteUserInTx(tx: Tx, userId: string): void | Promise<void> {
+  if (tx.dialect === "postgres") {
+    return tx.db
+      .delete(pgSchema.user)
+      .where(eq(pgSchema.user.id, userId))
+      .then(() => undefined);
+  }
+  tx.db.delete(sqliteSchema.user).where(eq(sqliteSchema.user.id, userId)).run();
+}
+
 /** Fill `id` and `createdAt` for an audit entry. */
 function buildAuditRow(entry: NewAuditLog): AuditLogRow {
   return {

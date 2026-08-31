@@ -263,6 +263,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteOwnAccount
+      summary: Delete the caller's own account
+      description: Requires authentication. Removes the caller's vehicles, fuel
+        entries, tokens, sessions, and identities. Recorded in the audit log
+        without personal content. The last active admin cannot delete their own
+        account.
+      responses:
+        "204":
+          description: Account deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Password change required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: This is the last active admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /tokens:
     get:
       operationId: listApiTokens

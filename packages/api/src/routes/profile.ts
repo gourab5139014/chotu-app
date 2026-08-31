@@ -1,6 +1,14 @@
 import { Hono } from "hono";
+import { deleteCookie } from "hono/cookie";
 import { z } from "zod";
 
+import { SESSION_COOKIE } from "../auth/tokens";
+import {
+  countActiveAdminsInTx,
+  deleteUserInTx,
+  writeAuditInTx,
+} from "../db/repositories";
+import { makeUnitOfWork } from "../db/uow";
 import { err } from "../domain/errors";
 import type { AppDeps, AppHono } from "../http/context";
 import { parseJson } from "../http/validate";
@@ -73,6 +81,48 @@ export function profileRoutes(deps: AppDeps): Hono<AppHono> {
 
     const updated = await deps.repos.users.update(user.id, patch);
     return c.json({ profile: publicProfile(updated) });
+  });
+
+  // DELETE /profile — delete the caller's own account (FR-7.3, FR-7.4).
+  // FK cascades remove the user's tokens and sessions. Vehicles, entries, and
+  // identities cascade the same way once those tables land (slices 7-9).
+  r.delete("/", async (c) => {
+    const user = c.get("user");
+    if (user == null) throw err.unauthorized();
+
+    const isAdmin = user.role === "admin";
+    const uow = makeUnitOfWork(deps.handle);
+
+    const auditEntry = {
+      actorUserId: null,
+      action: "user.self_deleted",
+      targetType: "user",
+      targetId: user.id,
+      summary: "A user deleted their own account",
+      metadata: null,
+      ip: null,
+    } as const;
+
+    await uow.run({ settings: isAdmin }, (tx) => {
+      if (tx.dialect === "postgres") {
+        return (async () => {
+          if (isAdmin && (await countActiveAdminsInTx(tx)) <= 1) {
+            throw err.lastAdmin();
+          }
+          await deleteUserInTx(tx, user.id);
+          await writeAuditInTx(tx, auditEntry);
+        })();
+      }
+      // SQLite: the uow callback must be synchronous.
+      if (isAdmin && (countActiveAdminsInTx(tx) as number) <= 1) {
+        throw err.lastAdmin();
+      }
+      void deleteUserInTx(tx, user.id);
+      void writeAuditInTx(tx, auditEntry);
+    });
+
+    deleteCookie(c, SESSION_COOKIE, { path: "/" });
+    return c.body(null, 204);
   });
 
   return r;

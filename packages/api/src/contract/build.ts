@@ -197,6 +197,21 @@ export function buildOpenApiDocument(): Json {
             "403": errorResponse("Password change required"),
           },
         },
+        delete: {
+          operationId: "deleteOwnAccount",
+          summary: "Delete the caller's own account",
+          description:
+            "Requires authentication. Removes the caller's vehicles, fuel " +
+            "entries, tokens, sessions, and identities. Recorded in the audit " +
+            "log without personal content. The last active admin cannot delete " +
+            "their own account.",
+          responses: {
+            "204": emptyResponse("Account deleted"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Password change required"),
+            "422": errorResponse("This is the last active admin"),
+          },
+        },
       },
       "/tokens": {
         get: {
