@@ -270,6 +270,16 @@ export function makeRepos(handle: DbHandle): Repos {
         );
         return rows.length;
       },
+      async latestActivityForUser(userId) {
+        const rows = await db
+          .select({ lastSeenAt: s.session.lastSeenAt })
+          .from(s.session)
+          .where(eq(s.session.userId, userId))
+          .orderBy(desc(s.session.lastSeenAt))
+          .limit(1);
+        const v = rows[0]?.lastSeenAt;
+        return v == null ? null : v instanceof Date ? v : new Date(v);
+      },
     },
 
     audit: {

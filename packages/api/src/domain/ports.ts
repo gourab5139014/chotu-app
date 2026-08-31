@@ -69,6 +69,8 @@ export interface SessionRepo {
   findByHash(tokenHash: string): Promise<SessionRow | null>;
   revoke(id: string, at: Date): Promise<void>;
   deleteExpired(now: Date): Promise<number>;
+  /** The most recent `last_seen_at` across the user's sessions, or null. */
+  latestActivityForUser(userId: string): Promise<Date | null>;
 }
 
 export interface AuditRepo {

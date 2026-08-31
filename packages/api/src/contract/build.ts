@@ -272,6 +272,53 @@ export function buildOpenApiDocument(): Json {
           },
         },
       },
+      "/admin/users": {
+        get: {
+          operationId: "adminListUsers",
+          summary: "List every account",
+          description:
+            "Admin only. Accounts, roles, status, and a vehicle count. No fuel " +
+            "entry data is ever included (INV-9).",
+          responses: {
+            "200": jsonResponse("Every account, newest first", {
+              type: "object",
+              required: ["users"],
+              properties: {
+                users: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/AdminUserListItem" },
+                },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+          },
+        },
+      },
+      "/admin/users/{id}": {
+        get: {
+          operationId: "adminGetUser",
+          summary: "One account with security metadata",
+          description:
+            "Admin only. Adds last sign-in, linked identities, and the active " +
+            "API-token count. No fuel entry data is ever included (INV-9).",
+          parameters: [
+            { name: "id", in: "path", required: true, schema: { type: "string" } },
+          ],
+          responses: {
+            "200": jsonResponse("The account", {
+              type: "object",
+              required: ["user"],
+              properties: {
+                user: { $ref: "#/components/schemas/AdminUserDetail" },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "404": errorResponse("No such user"),
+          },
+        },
+      },
       "/openapi.yaml": {
         get: {
           operationId: "getOpenApi",
@@ -326,6 +373,51 @@ export function buildOpenApiDocument(): Json {
             },
             mustChangePassword: { type: "boolean" },
           },
+        },
+        AdminUserListItem: {
+          type: "object",
+          required: [
+            "id",
+            "email",
+            "displayName",
+            "role",
+            "status",
+            "createdAt",
+            "vehicleCount",
+          ],
+          properties: {
+            id: { type: "string" },
+            email: { type: "string", format: "email" },
+            displayName: { type: "string" },
+            role: { type: "string", enum: ["user", "admin"] },
+            status: { type: "string", enum: ["active", "deactivated"] },
+            createdAt: { type: "string", format: "date-time" },
+            vehicleCount: { type: "integer", minimum: 0 },
+          },
+        },
+        AdminUserDetail: {
+          allOf: [
+            { $ref: "#/components/schemas/AdminUserListItem" },
+            {
+              type: "object",
+              required: [
+                "lastSignInAt",
+                "linkedIdentities",
+                "activeTokenCount",
+              ],
+              properties: {
+                lastSignInAt: {
+                  type: ["string", "null"],
+                  format: "date-time",
+                },
+                linkedIdentities: {
+                  type: "array",
+                  items: { type: "string" },
+                },
+                activeTokenCount: { type: "integer", minimum: 0 },
+              },
+            },
+          ],
         },
         ApiToken: {
           type: "object",

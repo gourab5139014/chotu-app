@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T5b.1
-- **Next task:** T5b.2
+- **Last completed task:** T5b.2 (slice 5b complete)
+- **Next task:** T5c.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -183,7 +183,7 @@ pause with almost no rework.
 - [x] **T5b.1** `admin` gate middleware (role check, not just a valid
   credential).
   *done when:* a non-admin credential gets `403` on an admin route.
-- [ ] **T5b.2** `GET /admin/users` list (email, role, status, created, vehicle
+- [x] **T5b.2** `GET /admin/users` list (email, role, status, created, vehicle
   count; no entry contents) and `GET /admin/users/:id` detail (adds last
   sign-in, linked identities, active token count) — FR-8.1, FR-8.2.
   *done when:* contract tests pass; no fuel-entry field appears in either
