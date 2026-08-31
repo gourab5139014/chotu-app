@@ -13,7 +13,7 @@
     "typecheck": "pnpm -r run typecheck",
     "lint": "eslint .",
     "test": "vitest run",
-    "db:check": "echo \"no schema yet\"",
+    "db:check": "pnpm --filter @chotu/api run db:check",
     "openapi:write": "echo \"no openapi yet\"",
     "verify": "pnpm run typecheck && pnpm run lint && pnpm run db:check && pnpm run test"
   },

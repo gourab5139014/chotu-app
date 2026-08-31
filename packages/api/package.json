@@ -14,15 +14,19 @@
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate --config drizzle.pg.config.ts && drizzle-kit generate --config drizzle.sqlite.config.ts",
+    "db:check": "drizzle-kit check --config drizzle.pg.config.ts && drizzle-kit check --config drizzle.sqlite.config.ts"
   },
   "dependencies": {
     "@hono/node-server": "1.14.1",
+    "drizzle-orm": "0.39.3",
     "hono": "4.7.4",
     "zod": "3.24.2"
   },
   "devDependencies": {
     "@types/node": "20.17.19",
+    "drizzle-kit": "0.30.4",
     "typescript": "5.7.3",
     "vitest": "3.0.5"
   }

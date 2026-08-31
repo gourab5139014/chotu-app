@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T1.5
-- **Next task:** T1.6
+- **Last completed task:** T1.6
+- **Next task:** T1.7
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -51,7 +51,7 @@ pause with almost no rework.
   `.env.example` regenerated from it.
   *done when:* unit test parses a good env and rejects a missing
   `SESSION_SIGNING_KEY`.
-- [ ] **T1.6** `drizzle.pg.config.ts`, `drizzle.sqlite.config.ts`, empty
+- [x] **T1.6** `drizzle.pg.config.ts`, `drizzle.sqlite.config.ts`, empty
   `src/db/schema/{pg,sqlite}.ts`, empty migration dirs.
   *done when:* `drizzle-kit check` runs clean for both dialects (no tables yet).
 - [ ] **T1.7** Rewrite `.github/workflows/ci.yml` for pnpm; add the seven
