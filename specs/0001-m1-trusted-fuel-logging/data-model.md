@@ -323,6 +323,8 @@ value FR-1.3 validates.
      password `tiger`, sets `must_change_password = true`, and prints a warning.
      A nod to the classic Oracle demo account. The API refuses non-development
      traffic while a default-credential admin still has the unchanged password.
+     `chotu.local` is a placeholder domain; adjust it if the deployment's email
+     validation rejects a reserved TLD.
 4. One `api_token` for that admin, printed once, so the operator can call the
    API immediately from the CLI or an agent.
 
@@ -332,11 +334,14 @@ value FR-1.3 validates.
   foreign keys and re-checked in the API. No entry without a vehicle. No vehicle
   without a user.
 - **INV-2 Odometer progression.** Order a vehicle's entries by `entry_date`,
-  then `created_at`. Each entry's `odometer_mi_e3` is greater than or equal to
-  the previous entry's, and greater than or equal to the vehicle's
-  `initial_odometer_mi_e3`. A strict decrease is rejected at write time
-  (`odometer_decrease`). A tie is allowed: the write succeeds and reconciliation
-  reports it. (Resolved, open question Q-2 option A.)
+  then `created_at`. The full ordered sequence of `odometer_mi_e3` is
+  non-decreasing, and the first entry is greater than or equal to the vehicle's
+  `initial_odometer_mi_e3`. A create or update is checked against **both** the
+  entry that would precede it and the entry that would follow it in that order,
+  because a back-dated or re-dated entry lands mid-sequence. Any adjacent pair
+  that would decrease rejects the write with `odometer_decrease`. An adjacent
+  tie is allowed: the write succeeds and reconciliation reports it. (Resolved,
+  open question Q-2 option A.)
 - **INV-3 Archived vehicle is read-only for entries.** No create or update of a
   `fuel_entry` whose vehicle has a non-null `archived_at`.
 - **INV-4 Future date bound.** `entry_date` is at most two days after the current
@@ -360,6 +365,14 @@ value FR-1.3 validates.
 INV-2, INV-4, and INV-6 are checked in the application because they need
 ordering, the user time zone, or a count. The database still enforces the
 per-row checks and every foreign key.
+
+**Concurrency.** INV-2 and INV-6 must not be raced. The write that checks INV-2
+first takes a row lock on the `vehicle` (`SELECT ... FOR UPDATE`), so two
+concurrent fuel-entry writes on one vehicle serialise. The write that checks
+INV-6 first takes a lock on the `deployment_settings` singleton row, so two
+concurrent demotions or deactivations serialise. Both checks and their writes
+run in one transaction. Where the engine supports it, a deferred constraint or
+trigger is added as a backstop.
 
 ## Derived values, not stored
 
@@ -413,8 +426,13 @@ under `packages/api/test/fixtures`.
 - `duplicate` — two entries with the same vehicle, date, odometer, volume, cost.
 - `orphaned` — an entry whose vehicle id is absent. Only loadable by bypassing
   the foreign key, to test the reconciliation report path.
-- `odometer-decrease` — an entry that violates INV-2.
-- `invalid-values` — zero volume, negative cost, bad currency code.
+- `odometer-decrease` — a sequence with one adjacent decreasing pair. Also used
+  for the mid-sequence insert check: an entry back-dated between two existing
+  entries so it must be validated against both neighbours.
+- `invalid-values` — zero volume, negative cost, out-of-range values.
 - `last-admin` — one admin only. Used to prove demote, deactivate, and delete
-  are all blocked by INV-6.
+  are all blocked by INV-6, and to exercise the concurrency lock.
 - `invite` — a pending invitation, an expired invitation, and an accepted one.
+- `oidc` — a mock issuer configuration plus one provider row with an allowed
+  email domain. Used for AC-11: first sign-in links or creates an identity, and
+  an out-of-domain sign-in is rejected.

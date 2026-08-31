@@ -97,13 +97,15 @@ Each journey is a sequence of API calls now, and a screen flow later.
   HttpOnly, Secure cookie for future browser use.
 - FR-2.2 Every endpoint requires a valid session or API token, except: health,
   the OpenAPI document, sign-in, invitation acceptance, password-reset request
-  and completion, and the OIDC callback.
+  and completion, and the OIDC sign-in start and callback.
 - FR-2.3 An invalid or missing credential returns `401` with the standard error
   body. A wrong email or password returns the same generic message, to avoid
   account enumeration.
 - FR-2.4 Sign-out revokes the current session.
 - FR-2.5 A session expires after `deployment_settings.session_ttl_seconds`. A
   deactivated user's sessions and tokens stop working immediately.
+- FR-2.6 A rate-limited request (see the auth-hardening non-functional) returns
+  `429` with the standard error body and a `Retry-After` header.
 
 ### FR-3 Registration and invitations
 
@@ -111,8 +113,11 @@ Each journey is a sequence of API calls now, and a screen flow later.
   `deployment_settings`. An admin can change it to `open` or `sso_auto`.
 - FR-3.2 An admin creates an invitation for an email, with an invited role of
   `user` or `admin`, and an expiry. The API returns a single-use link.
-- FR-3.3 An invited person accepts the link, sets a display name and a password,
-  and gets an account. The invitation is then consumed.
+- FR-3.3 An invited person accepts the link and sets a display name. They also
+  set a password, unless the deployment allows only OIDC, in which case they
+  complete the first OIDC sign-in instead. The invitation is then consumed.
+  `FR-9.2` keeps `password` available while any user lacks a linked identity, so
+  a fresh invitee normally sets a password.
 - FR-3.4 An expired, unknown, or already-accepted invitation is rejected with a
   specific error code.
 - FR-3.5 With policy `open`, anyone may self-register with an email and a
@@ -122,13 +127,17 @@ Each journey is a sequence of API calls now, and a screen flow later.
 
 ### FR-4 Password lifecycle
 
-- FR-4.1 A signed-in user changes their password by supplying the current one.
+- FR-4.1 A user changes their password by supplying the current one. A session
+  or an API token is accepted, so the seeded `scott` admin can clear
+  `must_change_password` with the token bootstrap printed.
 - FR-4.2 Anyone may request a password reset for an email. The API responds the
   same whether or not the email exists.
 - FR-4.3 A reset link is single-use and short-lived. Completing it sets a new
   password and revokes all of that user's sessions.
 - FR-4.4 An admin may trigger a reset for a user, which sends or returns a reset
-  link for that user.
+  link for that user. This is an intentional account-recovery power. It lets an
+  admin obtain a link that can set a user's password, so it is always written to
+  the audit log with the actor and target.
 - FR-4.5 A user whose account has `must_change_password` set may sign in, but
   every request other than "change password" returns `403` with
   `password_change_required` until a new password is set. This covers the seeded
@@ -166,33 +175,38 @@ Each journey is a sequence of API calls now, and a screen flow later.
 ### FR-7 User profile and account
 
 - FR-7.1 A user gets and updates their own profile: display name, unit system
-  (`metric` or `imperial`), ISO-4217 currency, IANA time zone.
-- FR-7.2 A unit or currency change does not rewrite stored entries. Stored
-  values are canonical. See `data-model.md`.
+  (`imperial` or `metric`), IANA time zone. `currency_code` is `USD` in M1 and
+  is not user-editable. See `FR-15.5`.
+- FR-7.2 A unit-system change does not rewrite stored entries. Stored values are
+  canonical. See `data-model.md`.
 - FR-7.3 A user deletes their own account. All of their vehicles, fuel entries,
   tokens, sessions, and identities are removed. The deletion is recorded in the
   audit log without personal content.
-- FR-7.4 The last active admin cannot delete their own account. See FR-8.7.
+- FR-7.4 The last active admin cannot delete their own account. See FR-8.8.
 
 ### FR-8 Admin: user management
 
 - FR-8.1 An admin lists users with email, role, status, created time, and a
   vehicle count. No fuel-entry contents are returned.
-- FR-8.2 An admin creates a user directly, or by invitation (FR-3.2).
-- FR-8.3 An admin deactivates and reactivates a user. A deactivated user cannot
+- FR-8.2 An admin gets one user's detail: email, role, status, created time,
+  last sign-in time, linked identities, active API-token count, and vehicle
+  count. No fuel-entry contents.
+- FR-8.3 An admin creates a user directly, or by invitation (FR-3.2).
+- FR-8.4 An admin deactivates and reactivates a user. A deactivated user cannot
   sign in and all their sessions and tokens stop working. Their data is kept.
-- FR-8.4 An admin triggers a password reset for a user (FR-4.4).
-- FR-8.5 An admin deletes a user and all their data, with an explicit confirm.
-- FR-8.6 An admin grants and revokes the admin role on another user.
-- FR-8.7 No operation may leave the deployment with zero active admins.
+- FR-8.5 An admin triggers a password reset for a user (FR-4.4).
+- FR-8.6 An admin deletes a user and all their data, with an explicit confirm.
+- FR-8.7 An admin grants and revokes the admin role on another user.
+- FR-8.8 No operation may leave the deployment with zero active admins.
   Demoting, deactivating, or deleting the last active admin is rejected with
   `last_admin`.
 
 ### FR-9 Admin: access policy and deployment configuration
 
 - FR-9.1 An admin reads and updates `deployment_settings`: deployment name,
-  registration policy, allowed auth methods, default unit system, default
-  currency, default time zone, session TTL, API-token TTL.
+  registration policy, allowed auth methods, default unit system, default time
+  zone, `fuel_volume_precision`, session TTL, API-token TTL. `default_currency`
+  is fixed to `USD` in M1.
 - FR-9.2 `allowed_auth_methods` must stay non-empty. Removing `password` is
   rejected while any user has no linked identity.
 - FR-9.3 An admin performs create, read, update, and delete on OIDC providers
@@ -210,8 +224,8 @@ Each journey is a sequence of API calls now, and a screen flow later.
 
 ### FR-11 Vehicle
 
-- FR-11.1 A user creates a vehicle with a name and a starting odometer in
-  canonical units. Optional: make, model, year, fuel type.
+- FR-11.1 A user creates a vehicle with a name and a starting odometer in the
+  caller's unit system. Optional: make, model, year, fuel type.
 - FR-11.2 A user lists their vehicles and gets one by id.
 - FR-11.3 A user updates a vehicle's editable fields.
 - FR-11.4 A user archives and unarchives a vehicle. An archived vehicle is
@@ -241,17 +255,30 @@ Each journey is a sequence of API calls now, and a screen flow later.
 
 ### FR-13 Validation and invariants
 
-- FR-13.1 Volume is greater than zero. Total cost is zero or greater.
-- FR-13.2 Odometer is a non-negative integer in canonical units.
-- FR-13.3 Odometer progression: within one vehicle, a later entry, ordered by
-  entry date then creation time, has an odometer greater than or equal to the
-  previous entry and the vehicle's starting odometer. A decrease is rejected
-  with `odometer_decrease`. A tie is allowed: the write succeeds and
-  reconciliation flags it. (Open question Q-2 resolved, option A.)
+- FR-13.1 Volume is greater than zero. Total cost is zero or greater. The
+  request values are in the caller's unit system. The canonical stored form is
+  an exact integer. See `data-model.md` D-1.
+- FR-13.2 Odometer is not negative. It may be fractional in the request. It is
+  stored as a non-negative integer in canonical units.
+- FR-13.3 Odometer progression. Within one vehicle, order the entries by entry
+  date, then creation time. After any create or update, the whole ordered
+  sequence must be non-decreasing, and the first entry must be greater than or
+  equal to the vehicle's starting odometer. A create or update is validated
+  against **both** the entry that would precede it and the entry that would
+  follow it, not only the predecessor, because a back-dated or re-dated entry
+  lands mid-sequence. A change that would make any adjacent pair decrease is
+  rejected with `odometer_decrease`. An adjacent tie is allowed: the write
+  succeeds and reconciliation flags it. (Q-2 resolved, option A.)
 - FR-13.4 Entry date is at most two days in the future in the owning user's time
   zone. The two-day window absorbs date-line and travel cases. (Q-3 resolved.)
 - FR-13.5 A create or update against an archived vehicle is rejected.
 - FR-13.6 All rejections use the standard error body with a stable `code`.
+- FR-13.7 Concurrency. The odometer-progression check (FR-13.3) and the
+  last-admin check (FR-8.8) run inside a serialised transaction. FR-13.3 takes a
+  row lock on the vehicle for the duration of the write. FR-8.8 takes a lock on
+  the `deployment_settings` singleton row before it counts active admins and
+  applies the change. Two concurrent writers cannot both pass a check and then
+  both commit.
 
 ### FR-14 History and retrieval
 
@@ -278,15 +305,19 @@ Each journey is a sequence of API calls now, and a screen flow later.
   defaults to `USD`.
 - FR-15.6 `deployment_settings.fuel_volume_precision` sets the number of
   fractional digits, default `3`, range `1..3`, for every volume the API
-  accepts, stores as meaningful, and returns, and for the derived
-  price-per-gallon. An admin sets it at install time. Raising it above 3 needs a
-  schema migration. (Q-4 and Q-5 resolved.)
+  accepts, rounds to, and returns, and for the derived price-per-gallon. An
+  admin sets it at install and may change it later through FR-9.1. Storage is
+  always the exact integer at scale 3, so a change only affects the digits the
+  API accepts and shows. It does not rewrite stored rows. A value above 3 would
+  need a schema migration and is out of range for M1. (Q-4 and Q-5 resolved.)
 
 ### FR-16 Export
 
 - FR-16.1 A user exports all their own profile, vehicle, and fuel-entry data in
   one documented, machine-readable file.
-- FR-16.2 The export states the schema version and the canonical units.
+- FR-16.2 The export states the schema version, the canonical units, and the
+  deployment's `fuel_volume_precision`, so a later importer knows the meaningful
+  digits.
 - FR-16.3 The export is complete enough to rebuild that user's dataset later.
   **Import is not in M1.** It lands in `0002` / M2, with the legacy migration.
   (Q-7 resolved.)
@@ -297,8 +328,11 @@ Each journey is a sequence of API calls now, and a screen flow later.
 - FR-17.2 An admin runs a deployment-wide reconciliation. The admin report
   carries record ids, the owning user id, and check codes only. It carries no
   fuel-entry field values.
-- FR-17.3 Checks cover: duplicate entries, orphaned entries, odometer ties and
-  decreases, missing required fields, and out-of-range values.
+- FR-17.3 Checks cover: duplicate entries (same vehicle, entry date, odometer,
+  volume, and total cost), orphaned entries, odometer ties, odometer decreases,
+  missing required fields, and out-of-range values. The decrease check cannot
+  fire on API-only data, since FR-13.3 rejects a decrease at write time. It is
+  kept as a safety net for `0002` import and any direct database change.
 - FR-17.4 A report lists each finding with the record id, the check code, and a
   human-readable message. It does not change data.
 - FR-17.5 A clean dataset returns an empty findings list.
@@ -319,6 +353,8 @@ Each journey is a sequence of API calls now, and a screen flow later.
 - FR-19.3 Every endpoint documents its request schema, response schema, auth
   requirement, and error codes. Descriptions are written so an LLM client can
   call the API correctly from the document alone.
+- FR-19.4 A health endpoint reports liveness and the applied schema version
+  without auth. It is one of the exceptions in FR-2.2.
 
 ## Non-functional requirements
 
@@ -378,6 +414,15 @@ Traceable to the Linear M1 acceptance criteria, restated for a multi-user API.
   an actor, an action code, and no secret content.
 - **AC-10.** `openapi.yaml` is complete, served by the API, and identical to the
   committed copy. Contract tests assert every response validates against it.
+- **AC-11.** OIDC works against a mock issuer. A first sign-in links or creates
+  the identity and starts a session. A sign-in whose claims fall outside a
+  provider's allowed domains or groups is rejected. Covered by the `oidc`
+  fixture and contract tests.
+- **AC-12.** With a seeded `scott` admin whose password is unchanged, the API
+  refuses to start in production mode and serves only in development mode. After
+  the password is changed, it starts in production mode. Every request from that
+  admin before the change, except "change password", returns
+  `password_change_required`.
 
 ## Out of scope
 
@@ -410,22 +455,23 @@ Traceable to the Linear M1 acceptance criteria, restated for a multi-user API.
 | This spec | User stories | Linear M1 |
 |---|---|---|
 | FR-1 | A-1..A-4 | bootstrap flow, documented minimum permissions |
-| FR-2 | U-1, U-5, U-6 | single-user sign-in, now multi-user |
-| FR-3 | U-2, A-5, A-12 | — (scope increase) |
+| FR-2 | U-5, U-6 | single-user sign-in, now multi-user |
+| FR-3 | U-1, U-2, A-12 | — (scope increase) |
 | FR-4 | U-7, U-8, A-8 | — (scope increase) |
-| FR-5 | U-48..U-49 | — (API-first addition) |
-| FR-6 | U-3, U-4, A-14, A-15 | — (scope increase) |
+| FR-5 | U-48, U-49 | — (API-first addition) |
+| FR-6 | U-3, U-4, A-13, A-14, A-15 | — (scope increase) |
 | FR-7 | U-9..U-14 | profile setup |
 | FR-8 | A-5..A-11 | — (scope increase) |
-| FR-9 | A-12..A-18 | — (scope increase) |
+| FR-9 | A-12, A-16..A-18 | — (scope increase) |
 | FR-10 | A-24, A-26 | — (scope increase) |
 | FR-11 | U-16..U-23 | vehicle create, view, edit, archive |
-| FR-12 | U-24..U-31 | manual fuel-entry flow, history, edit, delete |
+| FR-12 | U-24, U-29, U-30, U-31 | manual fuel-entry flow, edit, delete |
 | FR-13 | U-26, U-27 | validation and ownership rules |
+| FR-14 | U-28 | fuel-entry history |
 | FR-15 | U-25 | metric and imperial units |
 | FR-16 | U-45 | data export |
 | FR-17 | U-46, A-21 | reconciliation checks and fixtures |
 | FR-18 | A-22 | — (scope increase) |
 | FR-19 | U-50..U-52 | — (API-first addition) |
 | AC-1..AC-6 | — | Linear M1 acceptance criteria 1..6 |
-| AC-7..AC-9 | — | isolation, last-admin, audit (scope increase) |
+| AC-7..AC-12 | — | isolation, last-admin, audit, OIDC, prod guard (scope increase) |
