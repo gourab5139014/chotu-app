@@ -4,7 +4,18 @@ import { sql } from "drizzle-orm";
 import { migrate as migrateSqlite } from "drizzle-orm/better-sqlite3/migrator";
 import { migrate as migratePostgres } from "drizzle-orm/postgres-js/migrator";
 
+import { hashPassword } from "../auth/password";
+import {
+  API_TOKEN_PREFIX,
+  generateCredential,
+  generateLinkToken,
+  hashToken,
+} from "../auth/tokens";
+import { newId } from "../domain/id";
+
+import { makeRepos } from "./repositories";
 import { mappers } from "./schema/mappers";
+import type { DeploymentSettingsRow } from "./schema/types";
 import { CURRENT_SCHEMA_VERSION, isSchemaSupported } from "./schema/version";
 import { sqlQuery, sqlRun, type DbHandle } from "./index";
 
@@ -219,4 +230,161 @@ export async function bootstrapSchema(
   await runMigrations(handle);
   await writeSchemaMeta(handle, opts.build);
   await assertSchemaSupported(handle);
+}
+
+// ---------------------------------------------------------------------------
+// Seed the deployment (T3.3)
+// ---------------------------------------------------------------------------
+
+export const SEEDED_ADMIN_EMAIL = "scott@chotu.local";
+const SEEDED_ADMIN_PASSWORD = "tiger";
+
+const SETTINGS_DEFAULTS = {
+  deploymentName: "Chotu",
+  registrationPolicy: "invite_only",
+  allowedAuthMethods: ["password"],
+  defaultUnitSystem: "imperial",
+  defaultCurrencyCode: "USD",
+  defaultTimeZone: "America/New_York",
+  fuelVolumePrecision: 3,
+  sessionTtlSeconds: 60 * 60 * 24 * 7,
+  apiTokenTtlSeconds: null,
+} satisfies Omit<DeploymentSettingsRow, "id" | "createdAt" | "updatedAt">;
+
+export class AlreadySeededError extends Error {
+  constructor() {
+    super("This deployment is already bootstrapped (deployment_settings exists).");
+    this.name = "AlreadySeededError";
+  }
+}
+
+export type AdminSpec =
+  | { email: string; password: string }
+  | { email: string } // no password -> a one-time set-password link is issued
+  | { seedDefault: true }; // scott@chotu.local / tiger, must change password
+
+export interface SeedResult {
+  readonly adminId: string;
+  readonly adminEmail: string;
+  /** Plaintext API token for the admin. Shown once. */
+  readonly apiToken: string;
+  /** Present when the admin has no password yet — deliver this link. */
+  readonly setPasswordToken?: string;
+  readonly warnings: readonly string[];
+}
+
+/**
+ * Create the `deployment_settings` singleton and the first admin (FR-1.5),
+ * then issue one API token for it (FR-1.7). Idempotent guard: throws
+ * `AlreadySeededError` if settings already exist.
+ */
+export async function seedDeployment(
+  handle: DbHandle,
+  opts: {
+    admin: AdminSpec;
+    settings?: Partial<
+      Omit<DeploymentSettingsRow, "id" | "createdAt" | "updatedAt">
+    >;
+  },
+): Promise<SeedResult> {
+  const repos = makeRepos(handle);
+  if ((await repos.settings.get()) != null) {
+    throw new AlreadySeededError();
+  }
+
+  const t0 = new Date();
+  await repos.settings.create({
+    id: "singleton",
+    ...SETTINGS_DEFAULTS,
+    ...opts.settings,
+    createdAt: t0,
+    updatedAt: t0,
+  });
+
+  const warnings: string[] = [];
+  const adminId = newId();
+  let email: string;
+  let passwordHash: string | null;
+  let mustChangePassword = false;
+  let setPasswordToken: string | undefined;
+
+  if ("seedDefault" in opts.admin) {
+    email = SEEDED_ADMIN_EMAIL;
+    passwordHash = await hashPassword(SEEDED_ADMIN_PASSWORD);
+    mustChangePassword = true;
+    warnings.push(
+      `Seeded the default admin ${SEEDED_ADMIN_EMAIL} with password "${SEEDED_ADMIN_PASSWORD}". ` +
+        "Change it on first sign-in. The API will not serve production traffic until you do.",
+    );
+  } else if ("password" in opts.admin) {
+    email = opts.admin.email;
+    passwordHash = await hashPassword(opts.admin.password);
+  } else {
+    email = opts.admin.email;
+    passwordHash = null;
+  }
+
+  await repos.users.create({
+    id: adminId,
+    email,
+    emailVerifiedAt: null,
+    displayName: "Administrator",
+    role: "admin",
+    status: "active",
+    passwordHash,
+    mustChangePassword,
+    unitSystem: opts.settings?.defaultUnitSystem ?? SETTINGS_DEFAULTS.defaultUnitSystem,
+    currencyCode:
+      opts.settings?.defaultCurrencyCode ?? SETTINGS_DEFAULTS.defaultCurrencyCode,
+    timeZone:
+      opts.settings?.defaultTimeZone ?? SETTINGS_DEFAULTS.defaultTimeZone,
+    deactivatedAt: null,
+  });
+
+  if (passwordHash == null) {
+    const link = generateLinkToken();
+    await repos.userTokens.issue({
+      id: newId(),
+      userId: adminId,
+      purpose: "set_password",
+      tokenHash: hashToken(link),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    });
+    setPasswordToken = link;
+  }
+
+  const apiToken = generateCredential(API_TOKEN_PREFIX);
+  await repos.apiTokens.create({
+    id: newId(),
+    userId: adminId,
+    tokenHash: hashToken(apiToken),
+    label: "bootstrap",
+    expiresAt: null,
+  });
+
+  return {
+    adminId,
+    adminEmail: email,
+    apiToken,
+    ...(setPasswordToken != null ? { setPasswordToken } : {}),
+    warnings,
+  };
+}
+
+/** Full bootstrap: schema + seed, unless the deployment is already seeded. */
+export async function bootstrapDeployment(
+  handle: DbHandle,
+  opts: {
+    build: string;
+    admin: AdminSpec;
+    settings?: Partial<
+      Omit<DeploymentSettingsRow, "id" | "createdAt" | "updatedAt">
+    >;
+  },
+): Promise<SeedResult> {
+  await bootstrapSchema(handle, { build: opts.build });
+  return seedDeployment(handle, {
+    admin: opts.admin,
+    ...(opts.settings ? { settings: opts.settings } : {}),
+  });
 }
