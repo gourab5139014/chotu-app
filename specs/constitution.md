@@ -76,7 +76,7 @@ The API is the product. Every client is equal and talks to the API over HTTP.
 | Area | Decision | Reason |
 |---|---|---|
 | Language | TypeScript, `strict` mode | One typed contract from the database to the UI. |
-| Runtime | Node.js 20 LTS | Widest support for the ORM, drivers, and codegen tools. |
+| Runtime | Node.js 22 LTS | Current LTS. pnpm 11 needs Node >= 22.13 and GitHub Actions is deprecating Node 20 tooling. |
 | Package manager | pnpm workspace | Clean module boundaries. Room for more packages later. |
 | API service | Hono | Small, portable, runs on Node now and elsewhere later. |
 | API contract | OpenAPI 3.1, authored with `@hono/zod-openapi` | One Zod schema per payload. The spec is generated from code, so they cannot drift. A published OpenAPI document also lets an LLM chat client drive the API. |
