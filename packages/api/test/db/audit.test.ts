@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeRepos, writeAuditInTx } from "../../src/db/repositories";
 import { makeUnitOfWork } from "../../src/db/uow";
 import type { Repos } from "../../src/domain/ports";
+import { expectAuditDelta } from "../support/audit";
 import { openMigratedSqlite, type MigratedSqlite } from "../support/sqlite";
 
 const ENTRY = {
@@ -106,5 +107,35 @@ describe("audit_log — AuditRepo.record / list (SQLite)", () => {
     const one = await repos.audit.list({ targetType: "user", targetId: "u-1" });
     expect(one).toHaveLength(1);
     expect(one[0]?.summary).toBe("one");
+  });
+});
+
+describe("audit_log — expectAuditDelta helper (SQLite)", () => {
+  let mig: MigratedSqlite;
+
+  beforeEach(() => {
+    mig = openMigratedSqlite();
+  });
+
+  afterEach(async () => {
+    await mig.cleanup();
+  });
+
+  it("passes when a call adds exactly one row with the right action", async () => {
+    const repos = makeRepos(mig.handle);
+    const row = await expectAuditDelta(
+      mig.handle,
+      { action: "user.deactivated" },
+      () => repos.audit.record({ ...ENTRY }),
+    );
+    expect(row.action).toBe("user.deactivated");
+  });
+
+  it("fails when the call writes no audit row", async () => {
+    await expect(
+      expectAuditDelta(mig.handle, { action: "user.deactivated" }, () =>
+        Promise.resolve("nothing"),
+      ),
+    ).rejects.toThrow();
   });
 });
