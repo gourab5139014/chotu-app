@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** none
-- **Next task:** T1.1
+- **Last completed task:** T1.1
+- **Next task:** T1.2
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -33,7 +33,7 @@ pause with almost no rework.
 
 ## Slice 1 — Workspace + skeleton
 
-- [ ] **T1.1** Workspace root: `package.json`, `pnpm-workspace.yaml`,
+- [x] **T1.1** Workspace root: `package.json`, `pnpm-workspace.yaml`,
   `tsconfig.base.json` (strict, NodeNext, ES2022), `.nvmrc` = 20.
   *done when:* `pnpm -w install` succeeds; `pnpm -w exec tsc --version` prints.
 - [ ] **T1.2** `packages/api` scaffold: `package.json`, `tsconfig.json` extending

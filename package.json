@@ -1,0 +1,23 @@
+{
+  "name": "chotu",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Open-source, self-hostable Drivvo replacement",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "typecheck": "tsc --build --verbose",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "db:check": "echo \"no schema yet\"",
+    "openapi:write": "echo \"no openapi yet\"",
+    "verify": "pnpm run typecheck && pnpm run lint && pnpm run db:check && pnpm run test"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3"
+  }
+}
