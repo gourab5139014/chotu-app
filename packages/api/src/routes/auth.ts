@@ -1,13 +1,18 @@
 import { Hono } from "hono";
-import { setCookie } from "hono/cookie";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 
+import { hashPassword, verifyPassword } from "../auth/password";
+import {
+  revokeSessionByToken,
+} from "../auth/session";
 import { signIn } from "../auth/signin";
 import { SESSION_COOKIE } from "../auth/tokens";
 import { err } from "../domain/errors";
 import type { AppDeps, AppHono } from "../http/context";
 import { parseJson } from "../http/validate";
 import { authMiddleware } from "../middleware/auth";
+import { protect } from "../middleware/protect";
 import type { UserRow } from "../db/schema/types";
 
 const SignInBody = z.object({
@@ -15,7 +20,11 @@ const SignInBody = z.object({
   password: z.string().min(1),
 });
 
-/** Fields safe to return about the signed-in user. */
+const ChangePasswordBody = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
 function publicUser(u: UserRow) {
   return {
     id: u.id,
@@ -26,9 +35,16 @@ function publicUser(u: UserRow) {
   };
 }
 
+function bearerOrCookie(c: {
+  req: { header(n: string): string | undefined };
+}): string | null {
+  const h = c.req.header("authorization");
+  const m = h != null ? /^Bearer\s+(.+)$/i.exec(h.trim()) : null;
+  return m?.[1] ?? null;
+}
+
 export function authRoutes(deps: AppDeps): Hono<AppHono> {
   const r = new Hono<AppHono>();
-
   const DEFAULT_TTL = 60 * 60 * 24 * 7;
 
   // POST /auth/sign-in — email + password (FR-2.1)
@@ -60,8 +76,39 @@ export function authRoutes(deps: AppDeps): Hono<AppHono> {
     });
   });
 
-  // GET /auth/me — the signed-in user (FR-7.1 read; protected)
-  r.get("/me", authMiddleware(deps), (c) => {
+  // POST /auth/sign-out — revoke the current session (FR-2.4)
+  r.post("/sign-out", authMiddleware(deps), async (c) => {
+    const credential =
+      bearerOrCookie(c) ?? getCookie(c, SESSION_COOKIE) ?? null;
+    if (credential != null) {
+      await revokeSessionByToken(deps.handle, credential);
+    }
+    deleteCookie(c, SESSION_COOKIE, { path: "/" });
+    return c.body(null, 204);
+  });
+
+  // POST /auth/change-password — supply the current one (FR-4.1, FR-4.5)
+  r.post("/change-password", authMiddleware(deps), async (c) => {
+    const user = c.get("user");
+    if (user == null) throw err.unauthorized();
+    const body = await parseJson(c, ChangePasswordBody);
+
+    if (
+      user.passwordHash == null ||
+      !(await verifyPassword(user.passwordHash, body.currentPassword))
+    ) {
+      throw err.unauthorized("Current password is wrong.");
+    }
+
+    await deps.repos.users.update(user.id, {
+      passwordHash: await hashPassword(body.newPassword),
+      mustChangePassword: false,
+    });
+    return c.body(null, 204);
+  });
+
+  // GET /auth/me — the signed-in user (protected)
+  r.get("/me", ...protect(deps), (c) => {
     const user = c.get("user");
     if (user == null) throw err.unauthorized();
     return c.json({ user: publicUser(user) });

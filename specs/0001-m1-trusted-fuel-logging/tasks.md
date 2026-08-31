@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T4.4
-- **Next task:** T4.5
+- **Last completed task:** T4.5
+- **Next task:** T4.6
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -142,7 +142,7 @@ pause with almost no rework.
   `api_token.last_used_at` off the main transaction (FR-5.2).
   *done when:* session, token, expired, revoked, and deactivated cases each
   return the right status.
-- [ ] **T4.5** `must-change-password` gate middleware (FR-4.5); sign-out
+- [x] **T4.5** `must-change-password` gate middleware (FR-4.5); sign-out
   (FR-2.4).
   *done when:* a `must_change_password` user gets `403 password_change_required`
   on everything except change-password; sign-out revokes.
