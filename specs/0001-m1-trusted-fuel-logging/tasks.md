@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T2.7
-- **Next task:** T2.8
+- **Last completed task:** T2.8 (slice 2 complete)
+- **Next task:** T3.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -94,7 +94,7 @@ pause with almost no rework.
 - [x] **T2.7** Repositories for the slice-2 tables (`SettingsRepo`, `UserRepo`
   subset, `UserTokenRepo`, `ApiTokenRepo`, `SessionRepo`) against the ports.
   *done when:* repository tests pass in the `[postgres, sqlite]` matrix.
-- [ ] **T2.8** Fixture loader in `test/support`: direct full-privilege
+- [x] **T2.8** Fixture loader in `test/support`: direct full-privilege
   connection, seeds either adapter; add `clean` (users only, no vehicles yet).
   *done when:* the loader seeds both adapters and a test reads the rows back.
 
