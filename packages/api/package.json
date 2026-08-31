@@ -5,15 +5,15 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./src/index.ts"
   },
   "bin": {
-    "chotu": "./dist/bin/chotu.js"
+    "chotu": "./src/bin/chotu.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate --config drizzle.pg.config.ts && drizzle-kit generate --config drizzle.sqlite.config.ts",
     "db:check": "drizzle-kit check --config drizzle.pg.config.ts && drizzle-kit check --config drizzle.sqlite.config.ts"
@@ -27,6 +27,7 @@
   "devDependencies": {
     "@types/node": "20.17.19",
     "drizzle-kit": "0.30.4",
+    "tsx": "4.19.2",
     "typescript": "5.7.3",
     "vitest": "3.0.5"
   }

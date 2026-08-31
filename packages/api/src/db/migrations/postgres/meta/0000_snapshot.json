@@ -1,0 +1,154 @@
+{
+  "id": "3f916115-0db4-4a11-a65b-fd721598c929",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.deployment_settings": {
+      "name": "deployment_settings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "deployment_name": {
+          "name": "deployment_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "registration_policy": {
+          "name": "registration_policy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allowed_auth_methods": {
+          "name": "allowed_auth_methods",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "default_unit_system": {
+          "name": "default_unit_system",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "default_currency_code": {
+          "name": "default_currency_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "default_time_zone": {
+          "name": "default_time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fuel_volume_precision": {
+          "name": "fuel_volume_precision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_ttl_seconds": {
+          "name": "session_ttl_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "api_token_ttl_seconds": {
+          "name": "api_token_ttl_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "deployment_settings_registration_policy_ck": {
+          "name": "deployment_settings_registration_policy_ck",
+          "value": "\"deployment_settings\".\"registration_policy\" in ('invite_only', 'open', 'sso_auto')"
+        },
+        "deployment_settings_default_unit_system_ck": {
+          "name": "deployment_settings_default_unit_system_ck",
+          "value": "\"deployment_settings\".\"default_unit_system\" in ('imperial', 'metric')"
+        },
+        "deployment_settings_fuel_volume_precision_ck": {
+          "name": "deployment_settings_fuel_volume_precision_ck",
+          "value": "\"deployment_settings\".\"fuel_volume_precision\" between 1 and 3"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.schema_meta": {
+      "name": "schema_meta",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "schema_version": {
+          "name": "schema_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "applied_at": {
+          "name": "applied_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chotu_build": {
+          "name": "chotu_build",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

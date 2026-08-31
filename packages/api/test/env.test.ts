@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EnvError, parseEnv } from "../src/env.js";
+import { EnvError, parseEnv } from "../src/env";
 
 const base = {
   DATABASE_URL: "file:./chotu.db",

@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 
-import { buildApp } from "./app.js";
+import { buildApp } from "./app";
 
 /**
  * Process entry point. Startup guards (production vs SQLite, seeded-admin
