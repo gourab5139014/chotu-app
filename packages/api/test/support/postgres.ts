@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
+import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
@@ -15,25 +17,31 @@ export interface MigratedPostgres {
 }
 
 /**
- * A migrated PostgreSQL database for the round-trip and repository tests.
- * `DATABASE_URL` must point at a throwaway server (the CI postgres matrix leg).
- * The `public` schema is reset and re-migrated on every open, so tests do not
- * see each other's rows. The runtime adapter's own `search_path` behaviour
- * (FR-1.9) is covered by `adapters.test.ts`.
+ * A migrated PostgreSQL database in a per-call throwaway schema, so parallel
+ * test files do not collide on the shared CI database. The handle uses a single
+ * connection (`max: 1`) plus a `search_path` startup parameter, so every query
+ * lands in that schema. `DATABASE_URL` must point at the CI postgres server.
  */
 export async function openMigratedPostgres(
   url: string,
 ): Promise<MigratedPostgres> {
+  const schemaName = `chotu_test_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+
   const admin = postgres(url, { max: 1, onnotice: () => undefined });
-  await admin`drop schema if exists public cascade`;
-  await admin`create schema public`;
+  await admin.unsafe(`create schema "${schemaName}"`);
   await admin.end();
 
-  const handle = makePostgres(url, { schemaName: "public" });
+  const handle = makePostgres(url, { schemaName, max: 1 });
+  await handle.db.execute(sql.raw(`set search_path to "${schemaName}"`));
   await migrate(handle.db, { migrationsFolder });
 
   return {
     handle,
-    cleanup: () => handle.close(),
+    cleanup: async () => {
+      await handle.db.execute(
+        sql.raw(`drop schema if exists "${schemaName}" cascade`),
+      );
+      await handle.close();
+    },
   };
 }
