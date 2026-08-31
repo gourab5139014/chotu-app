@@ -10,6 +10,7 @@ import { onError, onNotFound } from "./middleware/error";
 import { logging } from "./middleware/logging";
 import { requestId } from "./middleware/request-id";
 import { authRoutes } from "./routes/auth";
+import { profileRoutes } from "./routes/profile";
 import { tokenRoutes } from "./routes/tokens";
 
 /**
@@ -42,6 +43,7 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
   );
 
   app.route("/auth", authRoutes(deps));
+  app.route("/profile", profileRoutes(deps));
   app.route("/tokens", tokenRoutes(deps));
 
   return app;

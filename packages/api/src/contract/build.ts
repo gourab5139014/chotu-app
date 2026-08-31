@@ -3,6 +3,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { CURRENT_SCHEMA_VERSION } from "../db/schema/version";
 import { ERROR_STATUS } from "../domain/errors";
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
+import { ProfileUpdateBody } from "../routes/profile";
 import { TokenCreateBody } from "../routes/tokens";
 
 /**
@@ -156,6 +157,47 @@ export function buildOpenApiDocument(): Json {
           },
         },
       },
+      "/profile": {
+        get: {
+          operationId: "getProfile",
+          summary: "The caller's own profile",
+          description:
+            "Requires authentication. Returns display name, unit system, IANA " +
+            "time zone, and the read-only USD currency code.",
+          responses: {
+            "200": jsonResponse("The caller's profile", {
+              type: "object",
+              required: ["profile"],
+              properties: {
+                profile: { $ref: "#/components/schemas/Profile" },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Password change required"),
+          },
+        },
+        patch: {
+          operationId: "updateProfile",
+          summary: "Update the caller's own profile",
+          description:
+            "Requires authentication. Any subset of display name, unit system, " +
+            "and time zone. `currency_code` is read-only USD in M1. A unit-system " +
+            "change does not rewrite stored data.",
+          requestBody: jsonBody(bodySchema(ProfileUpdateBody)),
+          responses: {
+            "200": jsonResponse("The updated profile", {
+              type: "object",
+              required: ["profile"],
+              properties: {
+                profile: { $ref: "#/components/schemas/Profile" },
+              },
+            }),
+            "400": errorResponse("Malformed body or no field to change"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Password change required"),
+          },
+        },
+      },
       "/tokens": {
         get: {
           operationId: "listApiTokens",
@@ -240,6 +282,33 @@ export function buildOpenApiDocument(): Json {
             email: { type: "string", format: "email" },
             displayName: { type: "string" },
             role: { type: "string", enum: ["user", "admin"] },
+            mustChangePassword: { type: "boolean" },
+          },
+        },
+        Profile: {
+          type: "object",
+          required: [
+            "id",
+            "email",
+            "displayName",
+            "role",
+            "unitSystem",
+            "timeZone",
+            "currencyCode",
+            "mustChangePassword",
+          ],
+          properties: {
+            id: { type: "string" },
+            email: { type: "string", format: "email" },
+            displayName: { type: "string" },
+            role: { type: "string", enum: ["user", "admin"] },
+            unitSystem: { type: "string", enum: ["imperial", "metric"] },
+            timeZone: { type: "string", description: "IANA time zone" },
+            currencyCode: {
+              type: "string",
+              const: "USD",
+              description: "Read-only in M1",
+            },
             mustChangePassword: { type: "boolean" },
           },
         },

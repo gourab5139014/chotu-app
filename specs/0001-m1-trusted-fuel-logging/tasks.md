@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T5a.2
-- **Next task:** T5a.3
+- **Last completed task:** T5a.3
+- **Next task:** T5a.4
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -169,7 +169,7 @@ pause with almost no rework.
 - [x] **T5a.2** `test/support` audit-delta helper: wrap a call, assert
   `audit_log` grew by exactly 1 with the expected `action`.
   *done when:* the helper is used in one passing test.
-- [ ] **T5a.3** Profile routes: `GET`/`PATCH` own profile (display name, unit
+- [x] **T5a.3** Profile routes: `GET`/`PATCH` own profile (display name, unit
   system, time zone; currency is read-only USD). No entry rewrite on a unit
   change (FR-7.1, FR-7.2).
   *done when:* contract tests pass on both adapters.
