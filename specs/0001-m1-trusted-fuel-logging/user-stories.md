@@ -1,6 +1,6 @@
 # 0001 — User stories
 
-- **Status:** draft, awaiting review
+- **Status:** reviewed 2026-08-30; ready for plan.md
 - **Related:** `spec.md`, `data-model.md`, `open-questions.md`, `../constitution.md`
 
 ## Actor model

@@ -1,6 +1,6 @@
 # 0001 — Data model
 
-- **Status:** draft, awaiting review
+- **Status:** reviewed 2026-08-30; ready for plan.md
 - **Scope:** the canonical domain model for M1, multi-user with an admin role
 - **Source of truth once built:** the Drizzle schema in
   `packages/api/src/db/schema`. This document is the design that schema realizes.
@@ -38,12 +38,15 @@ decimal digits, configurable per install. `volume_gal_e3` stores the value
 exactly as an integer at scale 3, so cross-adapter arithmetic stays exact. The
 number of fractional digits the API accepts, rounds to, stores as meaningful,
 and displays is `deployment_settings.fuel_volume_precision`. Default `3`, range
-`1..3`. The same setting drives the derived price-per-gallon. It is set at
-install time and used everywhere volume or price appears.
+`1..3`. The same setting drives the derived price-per-gallon. An admin sets it at
+install and may change it later (FR-9.1). It is used everywhere volume or price
+appears.
 
 *Note:* the API represents volume and price as JSON numbers with up to
-`fuel_volume_precision` fractional digits. Storage stays an exact integer.
-Raising precision above 3 would need a schema migration.
+`fuel_volume_precision` fractional digits. Storage stays an exact integer at
+scale 3, so changing the setting only affects accepted and displayed digits, not
+stored rows. A value above 3 would need a schema migration and is out of M1
+range.
 
 ### D-2 Currency
 

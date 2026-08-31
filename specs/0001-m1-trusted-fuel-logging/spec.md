@@ -1,6 +1,6 @@
 # 0001 — M1: Trusted fuel logging
 
-- **Status:** draft, awaiting review
+- **Status:** reviewed 2026-08-30; ready for plan.md
 - **Milestone:** Linear M1 — Trusted fuel logging
 - **Slice type:** vertical slice, API first, multi-user
 - **Depends on:** none
