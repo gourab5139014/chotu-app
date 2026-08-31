@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T4.6
-- **Next task:** T4.7
+- **Last completed task:** T4.7
+- **Next task:** T4.8
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -149,7 +149,7 @@ pause with almost no rework.
 - [x] **T4.6** API token routes: create (`cht_`, once), list, revoke (FR-5).
   Several active per user.
   *done when:* contract tests for the three routes pass on both adapters.
-- [ ] **T4.7** Rate-limit middleware (token bucket, per IP + per account,
+- [x] **T4.7** Rate-limit middleware (token bucket, per IP + per account,
   `TRUSTED_PROXY` handling, `429` + `Retry-After`) on sign-in and the reset and
   invite routes when they land.
   *done when:* a burst past the draft threshold returns `429` with the header.

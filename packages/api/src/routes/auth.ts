@@ -13,6 +13,7 @@ import type { AppDeps, AppHono } from "../http/context";
 import { parseJson } from "../http/validate";
 import { authMiddleware } from "../middleware/auth";
 import { protect } from "../middleware/protect";
+import { clientIp } from "../middleware/rate-limit";
 import type { UserRow } from "../db/schema/types";
 
 const SignInBody = z.object({
@@ -47,9 +48,32 @@ export function authRoutes(deps: AppDeps): Hono<AppHono> {
   const r = new Hono<AppHono>();
   const DEFAULT_TTL = 60 * 60 * 24 * 7;
 
-  // POST /auth/sign-in — email + password (FR-2.1)
-  r.post("/sign-in", async (c) => {
-    const body = await parseJson(c, SignInBody);
+  const ipPerMin = deps.env.RATE_LIMIT_SIGNIN_PER_MIN_IP ?? 10;
+  const acctPerMin = deps.env.RATE_LIMIT_SIGNIN_PER_MIN_ACCOUNT ?? 5;
+
+  // POST /auth/sign-in — email + password (FR-2.1), rate limited per IP + per
+  // account (FR-2.6, NFR auth hardening).
+  r.post(
+    "/sign-in",
+    deps.rateLimiter.limit({
+      limit: ipPerMin,
+      windowMs: 60_000,
+      keys: (c) => [`signin:ip:${clientIp(c, deps.env.TRUSTED_PROXY)}`],
+    }),
+    deps.rateLimiter.limit({
+      limit: acctPerMin,
+      windowMs: 60_000,
+      keys: async (c) => {
+        const raw = (await c.req.json().catch(() => ({}))) as {
+          email?: unknown;
+        };
+        const email =
+          typeof raw.email === "string" ? raw.email.toLowerCase() : "?";
+        return [`signin:acct:${email}`];
+      },
+    }),
+    async (c) => {
+      const body = await parseJson(c, SignInBody);
     const settings = await deps.repos.settings.get();
     const result = await signIn(
       deps.handle,
@@ -69,12 +93,13 @@ export function authRoutes(deps: AppDeps): Hono<AppHono> {
       expires: result.expiresAt,
     });
 
-    return c.json({
-      user: publicUser(result.user),
-      session: result.sessionToken,
-      expiresAt: result.expiresAt.toISOString(),
-    });
-  });
+      return c.json({
+        user: publicUser(result.user),
+        session: result.sessionToken,
+        expiresAt: result.expiresAt.toISOString(),
+      });
+    },
+  );
 
   // POST /auth/sign-out — revoke the current session (FR-2.4)
   r.post("/sign-out", authMiddleware(deps), async (c) => {

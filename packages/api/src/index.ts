@@ -5,6 +5,7 @@ import { assertSchemaSupported } from "./db/bootstrap";
 import { makeDb } from "./db/index";
 import { makeRepos } from "./db/repositories";
 import { parseEnv } from "./env";
+import { createRateLimiter } from "./middleware/rate-limit";
 import { assertStartupSafe } from "./startup";
 
 async function main(): Promise<void> {
@@ -16,7 +17,12 @@ async function main(): Promise<void> {
   await assertSchemaSupported(handle);
   await assertStartupSafe(env, handle);
 
-  const app = buildApp({ env, handle, repos: makeRepos(handle) });
+  const app = buildApp({
+    env,
+    handle,
+    repos: makeRepos(handle),
+    rateLimiter: createRateLimiter(),
+  });
   serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`chotu api listening on :${info.port} (${env.CHOTU_ENV})`);
   });

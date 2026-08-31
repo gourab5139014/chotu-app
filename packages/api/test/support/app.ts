@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 
 import { buildApp } from "../../src/app";
 import { makeRepos } from "../../src/db/repositories";
+import { createRateLimiter, type RateLimiter } from "../../src/middleware/rate-limit";
 import { parseEnv, type Env } from "../../src/env";
 import type { AppHono } from "../../src/http/context";
 import type { DbHandle } from "../../src/db/index";
@@ -14,6 +15,7 @@ export interface TestApp {
   readonly handle: DbHandle;
   readonly repos: Repos;
   readonly env: Env;
+  readonly rateLimiter: RateLimiter;
   cleanup(): Promise<void>;
 }
 
@@ -26,11 +28,13 @@ export function makeTestApp(over: Partial<Record<keyof Env, string>> = {}): Test
     ...over,
   });
   const repos = makeRepos(mig.handle);
+  const rateLimiter = createRateLimiter();
   return {
-    app: buildApp({ env, handle: mig.handle, repos }),
+    app: buildApp({ env, handle: mig.handle, repos, rateLimiter }),
     handle: mig.handle,
     repos,
     env,
+    rateLimiter,
     cleanup: () => mig.cleanup(),
   };
 }
