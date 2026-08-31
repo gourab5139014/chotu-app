@@ -19,34 +19,43 @@ function bearer(header: string | undefined): string | null {
 }
 
 /**
- * Resolve a session cookie or an `Authorization: Bearer` credential (session or
- * API token, by prefix) to a live user. Rejects a missing, invalid, expired,
- * revoked, or deactivated credential with `401` (FR-2.2, FR-2.5). On success
- * sets `c.get("user")` and `c.get("authKind")`.
+ * Resolve a credential to a live user (FR-2.2, FR-2.5). Precedence:
+ *   1. `Authorization: Bearer cht_...`  -> API token
+ *   2. `Authorization: Bearer chs_...`  -> session (headless, Q-11)
+ *   3. the `chotu_session` cookie       -> session
+ * A bearer value with no known prefix is rejected outright; it never falls
+ * through to the cookie. Missing/invalid/expired/revoked/deactivated -> 401.
  */
 export function authMiddleware(deps: AppDeps) {
   return createMiddleware<AppHono>(async (c, next) => {
-    const credential =
-      bearer(c.req.header("authorization")) ?? getCookie(c, SESSION_COOKIE) ?? null;
-    if (credential == null) throw err.unauthorized();
+    const bearerValue = bearer(c.req.header("authorization"));
 
-    if (credential.startsWith(API_TOKEN_PREFIX)) {
-      const hit = await resolveApiToken(deps.handle, credential);
-      if (hit == null) throw err.unauthorized();
-      c.set("user", hit.user);
-      c.set("authKind", "token");
-      // FR-5.2: last-used, outside the request's critical path.
-      void makeRepos(deps.handle)
-        .apiTokens.touch(hit.tokenId, new Date())
-        .catch(() => undefined);
-      await next();
-      return;
+    if (bearerValue != null) {
+      if (bearerValue.startsWith(API_TOKEN_PREFIX)) {
+        const hit = await resolveApiToken(deps.handle, bearerValue);
+        if (hit == null) throw err.unauthorized();
+        c.set("user", hit.user);
+        c.set("authKind", "token");
+        void makeRepos(deps.handle)
+          .apiTokens.touch(hit.tokenId, new Date())
+          .catch(() => undefined);
+        await next();
+        return;
+      }
+      if (bearerValue.startsWith(SESSION_PREFIX)) {
+        const hit = await resolveSession(deps.handle, bearerValue);
+        if (hit == null) throw err.unauthorized();
+        c.set("user", hit.user);
+        c.set("authKind", "session");
+        await next();
+        return;
+      }
+      throw err.unauthorized();
     }
 
-    // A session credential, whether it carried the chs_ prefix or came from
-    // the cookie.
-    if (credential.startsWith(SESSION_PREFIX) || getCookie(c, SESSION_COOKIE)) {
-      const hit = await resolveSession(deps.handle, credential);
+    const cookie = getCookie(c, SESSION_COOKIE);
+    if (cookie != null && cookie.length > 0) {
+      const hit = await resolveSession(deps.handle, cookie);
       if (hit == null) throw err.unauthorized();
       c.set("user", hit.user);
       c.set("authKind", "session");

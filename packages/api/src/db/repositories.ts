@@ -114,12 +114,7 @@ export function makeRepos(handle: DbHandle): Repos {
         return first<UserRow>(rows, mappers.user.toDomain);
       },
       async update(id, patch) {
-        const values: any = { ...patch, updatedAt: now() };
-        for (const k of ["emailVerifiedAt", "updatedAt", "deactivatedAt"]) {
-          if (values[k] instanceof Date && a === "sqlite") {
-            values[k] = values[k].toISOString();
-          }
-        }
+        const values = mappers.user.toRow({ ...patch, updatedAt: now() }, a);
         const rows = await returningAll(
           db.update(s.user).set(values).where(eq(s.user.id, id)),
         );

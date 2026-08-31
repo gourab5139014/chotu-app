@@ -106,19 +106,20 @@ export const mappers = {
   },
   user: {
     toDomain: (r: Raw) => rowToDomain<UserRow>(r, USER),
-    toRow: (d: UserRow, a: Adapter) => domainToRow(d, USER, a),
+    toRow: (d: Partial<UserRow>, a: Adapter) => domainToRow(d, USER, a),
   },
   userToken: {
     toDomain: (r: Raw) => rowToDomain<UserTokenRow>(r, USER_TOKEN),
-    toRow: (d: UserTokenRow, a: Adapter) => domainToRow(d, USER_TOKEN, a),
+    toRow: (d: Partial<UserTokenRow>, a: Adapter) =>
+      domainToRow(d, USER_TOKEN, a),
   },
   apiToken: {
     toDomain: (r: Raw) => rowToDomain<ApiTokenRow>(r, API_TOKEN),
-    toRow: (d: ApiTokenRow, a: Adapter) => domainToRow(d, API_TOKEN, a),
+    toRow: (d: Partial<ApiTokenRow>, a: Adapter) => domainToRow(d, API_TOKEN, a),
   },
   session: {
     toDomain: (r: Raw) => rowToDomain<SessionRow>(r, SESSION),
-    toRow: (d: SessionRow, a: Adapter) => domainToRow(d, SESSION, a),
+    toRow: (d: Partial<SessionRow>, a: Adapter) => domainToRow(d, SESSION, a),
   },
 } as const;
 

@@ -8,8 +8,10 @@ import type { AppHono } from "../http/context";
 /** Map any thrown error to the standard `{ code, message, details? }` body. */
 export function onError(e: Error, c: Context<AppHono>): Response {
   if (e instanceof AppError) {
+    c.set("errorCode", e.code);
     return c.json(e.toBody(), e.status as ContentfulStatusCode);
   }
+  c.set("errorCode", "internal_error");
   logEvent({
     level: "error",
     requestId: c.get("requestId"),
@@ -24,5 +26,6 @@ export function onError(e: Error, c: Context<AppHono>): Response {
 }
 
 export function onNotFound(c: Context<AppHono>): Response {
+  c.set("errorCode", "not_found");
   return c.json({ code: "not_found" as const, message: "Not found" }, 404);
 }

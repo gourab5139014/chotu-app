@@ -268,8 +268,13 @@ export interface SeedResult {
 
 /**
  * Create the `deployment_settings` singleton and the first admin (FR-1.5),
- * then issue one API token for it (FR-1.7). Idempotent guard: throws
- * `AlreadySeededError` if settings already exist.
+ * then issue one API token for it (FR-1.7).
+ *
+ * The writes are not one transaction (a password hash is computed between
+ * them), so instead this is **resumable**: it throws `AlreadySeededError` only
+ * once both the settings row and an active admin exist. A re-run after a
+ * partial failure reuses whatever is already there and finishes the rest,
+ * always returning a fresh API token.
  */
 export async function seedDeployment(
   handle: DbHandle,
@@ -281,21 +286,17 @@ export async function seedDeployment(
   },
 ): Promise<SeedResult> {
   const repos = makeRepos(handle);
-  if ((await repos.settings.get()) != null) {
+
+  const existingSettings = await repos.settings.get();
+  const existingAdmins = (await repos.users.list()).filter(
+    (u) => u.role === "admin" && u.status === "active",
+  );
+  if (existingSettings != null && existingAdmins.length > 0) {
     throw new AlreadySeededError();
   }
 
-  const t0 = new Date();
-  await repos.settings.create({
-    id: "singleton",
-    ...SETTINGS_DEFAULTS,
-    ...opts.settings,
-    createdAt: t0,
-    updatedAt: t0,
-  });
-
+  // Resolve the admin identity + hash first (async CPU work, no DB).
   const warnings: string[] = [];
-  const adminId = newId();
   let email: string;
   let passwordHash: string | null;
   let mustChangePassword = false;
@@ -317,24 +318,42 @@ export async function seedDeployment(
     passwordHash = null;
   }
 
-  await repos.users.create({
-    id: adminId,
-    email,
-    emailVerifiedAt: null,
-    displayName: "Administrator",
-    role: "admin",
-    status: "active",
-    passwordHash,
-    mustChangePassword,
-    unitSystem: opts.settings?.defaultUnitSystem ?? SETTINGS_DEFAULTS.defaultUnitSystem,
-    currencyCode:
-      opts.settings?.defaultCurrencyCode ?? SETTINGS_DEFAULTS.defaultCurrencyCode,
-    timeZone:
-      opts.settings?.defaultTimeZone ?? SETTINGS_DEFAULTS.defaultTimeZone,
-    deactivatedAt: null,
-  });
+  if (existingSettings == null) {
+    const t0 = new Date();
+    await repos.settings.create({
+      id: "singleton",
+      ...SETTINGS_DEFAULTS,
+      ...opts.settings,
+      createdAt: t0,
+      updatedAt: t0,
+    });
+  }
 
-  if (passwordHash == null) {
+  // Reuse an admin from a partial prior run if it matches, else create one.
+  const prior = await repos.users.findByEmail(email);
+  const adminId = prior?.id ?? newId();
+  if (prior == null) {
+    await repos.users.create({
+      id: adminId,
+      email,
+      emailVerifiedAt: null,
+      displayName: "Administrator",
+      role: "admin",
+      status: "active",
+      passwordHash,
+      mustChangePassword,
+      unitSystem:
+        opts.settings?.defaultUnitSystem ?? SETTINGS_DEFAULTS.defaultUnitSystem,
+      currencyCode:
+        opts.settings?.defaultCurrencyCode ??
+        SETTINGS_DEFAULTS.defaultCurrencyCode,
+      timeZone:
+        opts.settings?.defaultTimeZone ?? SETTINGS_DEFAULTS.defaultTimeZone,
+      deactivatedAt: null,
+    });
+  }
+
+  if ((prior?.passwordHash ?? passwordHash) == null) {
     const link = generateLinkToken();
     await repos.userTokens.issue({
       id: newId(),

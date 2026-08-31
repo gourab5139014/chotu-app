@@ -48,50 +48,55 @@ export function authRoutes(deps: AppDeps): Hono<AppHono> {
   const r = new Hono<AppHono>();
   const DEFAULT_TTL = 60 * 60 * 24 * 7;
 
-  const ipPerMin = deps.env.RATE_LIMIT_SIGNIN_PER_MIN_IP ?? 10;
-  const acctPerMin = deps.env.RATE_LIMIT_SIGNIN_PER_MIN_ACCOUNT ?? 5;
+  const WINDOW = 60_000;
+  // Per-IP: floods only. Coarse behind an untrusted proxy — see clientIp docs.
+  const ipPerMin = deps.env.RATE_LIMIT_SIGNIN_PER_MIN_IP ?? 30;
+  // Per-account: counts only FAILED attempts, so a legitimate user is never
+  // locked out by their own successful sign-ins.
+  const acctFailPerMin = deps.env.RATE_LIMIT_SIGNIN_PER_MIN_ACCOUNT ?? 5;
 
-  // POST /auth/sign-in — email + password (FR-2.1), rate limited per IP + per
-  // account (FR-2.6, NFR auth hardening).
+  // POST /auth/sign-in — email + password (FR-2.1, FR-2.6)
   r.post(
     "/sign-in",
     deps.rateLimiter.limit({
       limit: ipPerMin,
-      windowMs: 60_000,
+      windowMs: WINDOW,
       keys: (c) => [`signin:ip:${clientIp(c, deps.env.TRUSTED_PROXY)}`],
-    }),
-    deps.rateLimiter.limit({
-      limit: acctPerMin,
-      windowMs: 60_000,
-      keys: async (c) => {
-        const raw = (await c.req.json().catch(() => ({}))) as {
-          email?: unknown;
-        };
-        const email =
-          typeof raw.email === "string" ? raw.email.toLowerCase() : "?";
-        return [`signin:acct:${email}`];
-      },
     }),
     async (c) => {
       const body = await parseJson(c, SignInBody);
-    const settings = await deps.repos.settings.get();
-    const result = await signIn(
-      deps.handle,
-      { email: body.email, password: body.password },
-      {
-        sessionTtlSeconds: settings?.sessionTtlSeconds ?? DEFAULT_TTL,
-        userAgent: c.req.header("user-agent") ?? null,
-        ip: c.req.header("x-forwarded-for") ?? null,
-      },
-    );
+      const acctKey = `signin:acct:${body.email.toLowerCase()}`;
 
-    setCookie(c, SESSION_COOKIE, result.sessionToken, {
-      httpOnly: true,
-      secure: deps.env.CHOTU_ENV === "production",
-      sameSite: "Lax",
-      path: "/",
-      expires: result.expiresAt,
-    });
+      const wait = deps.rateLimiter.check(acctKey, acctFailPerMin, WINDOW);
+      if (wait > 0) {
+        c.header("Retry-After", String(wait));
+        throw err.rateLimited();
+      }
+
+      const settings = await deps.repos.settings.get();
+      let result;
+      try {
+        result = await signIn(
+          deps.handle,
+          { email: body.email, password: body.password },
+          {
+            sessionTtlSeconds: settings?.sessionTtlSeconds ?? DEFAULT_TTL,
+            userAgent: c.req.header("user-agent") ?? null,
+            ip: c.req.header("x-forwarded-for") ?? null,
+          },
+        );
+      } catch (e) {
+        deps.rateLimiter.consume(acctKey, WINDOW);
+        throw e;
+      }
+
+      setCookie(c, SESSION_COOKIE, result.sessionToken, {
+        httpOnly: true,
+        secure: deps.env.CHOTU_ENV === "production",
+        sameSite: "Lax",
+        path: "/",
+        expires: result.expiresAt,
+      });
 
       return c.json({
         user: publicUser(result.user),

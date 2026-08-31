@@ -10,9 +10,15 @@ export interface SqliteHandle {
   close(): Promise<void>;
 }
 
-/** `file:./x.db`, `file::memory:`, `:memory:`, or a bare path. */
+/** `file:./x.db`, `sqlite:/x.db`, `file::memory:`, `:memory:`, or a bare path. */
 function resolvePath(url: string): string {
-  const stripped = url.startsWith("file:") ? url.slice("file:".length) : url;
+  let stripped = url;
+  for (const prefix of ["file://", "file:", "sqlite://", "sqlite:"]) {
+    if (stripped.startsWith(prefix)) {
+      stripped = stripped.slice(prefix.length);
+      break;
+    }
+  }
   return stripped === "" || stripped === ":memory:" ? ":memory:" : stripped;
 }
 
