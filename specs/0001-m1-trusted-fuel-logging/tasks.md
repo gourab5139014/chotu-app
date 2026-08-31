@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T4.5
-- **Next task:** T4.6
+- **Last completed task:** T4.6
+- **Next task:** T4.7
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -146,7 +146,7 @@ pause with almost no rework.
   (FR-2.4).
   *done when:* a `must_change_password` user gets `403 password_change_required`
   on everything except change-password; sign-out revokes.
-- [ ] **T4.6** API token routes: create (`cht_`, once), list, revoke (FR-5).
+- [x] **T4.6** API token routes: create (`cht_`, once), list, revoke (FR-5).
   Several active per user.
   *done when:* contract tests for the three routes pass on both adapters.
 - [ ] **T4.7** Rate-limit middleware (token bucket, per IP + per account,

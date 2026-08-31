@@ -199,6 +199,14 @@ export function makeRepos(handle: DbHandle): Repos {
         await db.insert(s.apiToken).values(mappers.apiToken.toRow(row, a));
         return row;
       },
+      async findById(id) {
+        const rows = await db
+          .select()
+          .from(s.apiToken)
+          .where(eq(s.apiToken.id, id))
+          .limit(1);
+        return first<ApiTokenRow>(rows, mappers.apiToken.toDomain);
+      },
       async findByHash(tokenHash) {
         const rows = await db
           .select()

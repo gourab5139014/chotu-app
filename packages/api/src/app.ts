@@ -7,6 +7,7 @@ import { onError, onNotFound } from "./middleware/error";
 import { logging } from "./middleware/logging";
 import { requestId } from "./middleware/request-id";
 import { authRoutes } from "./routes/auth";
+import { tokenRoutes } from "./routes/tokens";
 
 /**
  * Build the Chotu HTTP app. Resource routes are added slice by slice; this
@@ -33,6 +34,7 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
   );
 
   app.route("/auth", authRoutes(deps));
+  app.route("/tokens", tokenRoutes(deps));
 
   return app;
 }

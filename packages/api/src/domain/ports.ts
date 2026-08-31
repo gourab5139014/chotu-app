@@ -55,6 +55,7 @@ export interface UserTokenRepo {
 
 export interface ApiTokenRepo {
   create(token: NewApiToken): Promise<ApiTokenRow>;
+  findById(id: string): Promise<ApiTokenRow | null>;
   findByHash(tokenHash: string): Promise<ApiTokenRow | null>;
   listForUser(userId: string): Promise<ApiTokenRow[]>;
   revoke(id: string, at: Date): Promise<void>;
