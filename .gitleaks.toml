@@ -1,0 +1,26 @@
+# gitleaks configuration for Chotu.
+#
+# Extends the built-in rule set. The allowlist below removes false positives
+# from test fixtures. Test code must never hold a real credential — the values
+# here are fixed sample strings that the test suite feeds to the app.
+#
+# GitHub push protection and secret scanning still cover real provider tokens
+# (AWS keys, GitHub PATs, and so on) independent of this file.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Chotu test fixtures and sample values"
+
+# The signing key and credentials used by the test harness.
+regexes = [
+  '''test-signing-key-0123456789''',
+  '''chotu-no-such-account-constant''',
+]
+
+# Fixture and support files under the test trees.
+paths = [
+  '''packages/api/test/support/.*''',
+  '''packages/api/test/fixtures/.*''',
+]
