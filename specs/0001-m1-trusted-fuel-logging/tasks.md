@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T2.4
-- **Next task:** T2.5
+- **Last completed task:** T2.5
+- **Next task:** T2.6
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -83,7 +83,7 @@ pause with almost no rework.
   busy timeout). A `makeDb(url)` that picks the adapter from the URL scheme.
   *done when:* an integration test connects to each (Postgres via a service
   container / local, SQLite via a temp file) and runs `select 1`.
-- [ ] **T2.5** `UnitOfWork`: `uow.run(fn)`, `tx.lockVehicle(id)`,
+- [x] **T2.5** `UnitOfWork`: `uow.run(fn)`, `tx.lockVehicle(id)`,
   `tx.lockSettings()`. Postgres uses `FOR UPDATE`; SQLite brackets
   `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` with a synchronous body.
   *done when:* a test proves rollback on throw, commit on return, and that a
