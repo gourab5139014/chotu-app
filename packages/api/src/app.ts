@@ -9,7 +9,9 @@ import type { AppDeps, AppHono } from "./http/context";
 import { onError, onNotFound } from "./middleware/error";
 import { logging } from "./middleware/logging";
 import { requestId } from "./middleware/request-id";
+import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
+import { profileRoutes } from "./routes/profile";
 import { tokenRoutes } from "./routes/tokens";
 
 /**
@@ -42,7 +44,9 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
   );
 
   app.route("/auth", authRoutes(deps));
+  app.route("/profile", profileRoutes(deps));
   app.route("/tokens", tokenRoutes(deps));
+  app.route("/admin", adminRoutes(deps));
 
   return app;
 }

@@ -11,6 +11,7 @@
 import type { Adapter } from "../index";
 import type {
   ApiTokenRow,
+  AuditLogRow,
   DeploymentSettingsRow,
   SchemaMetaRow,
   SessionRow,
@@ -92,6 +93,7 @@ const SESSION: TableMap = {
   instants: ["createdAt", "lastSeenAt", "expiresAt", "revokedAt"],
   safeInts: [],
 };
+const AUDIT_LOG: TableMap = { instants: ["createdAt"], safeInts: [] };
 
 export const mappers = {
   schemaMeta: {
@@ -120,6 +122,10 @@ export const mappers = {
   session: {
     toDomain: (r: Raw) => rowToDomain<SessionRow>(r, SESSION),
     toRow: (d: Partial<SessionRow>, a: Adapter) => domainToRow(d, SESSION, a),
+  },
+  auditLog: {
+    toDomain: (r: Raw) => rowToDomain<AuditLogRow>(r, AUDIT_LOG),
+    toRow: (d: Partial<AuditLogRow>, a: Adapter) => domainToRow(d, AUDIT_LOG, a),
   },
 } as const;
 

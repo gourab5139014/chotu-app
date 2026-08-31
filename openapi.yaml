@@ -177,6 +177,120 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /profile:
+    get:
+      operationId: getProfile
+      summary: The caller's own profile
+      description: Requires authentication. Returns display name, unit system, IANA
+        time zone, and the read-only USD currency code.
+      responses:
+        "200":
+          description: The caller's profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - profile
+                properties:
+                  profile:
+                    $ref: "#/components/schemas/Profile"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Password change required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateProfile
+      summary: Update the caller's own profile
+      description: Requires authentication. Any subset of display name, unit system,
+        and time zone. `currency_code` is read-only USD in M1. A unit-system
+        change does not rewrite stored data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                unitSystem:
+                  type: string
+                  enum:
+                    - imperial
+                    - metric
+                timeZone:
+                  type: string
+                  minLength: 1
+              additionalProperties: false
+      responses:
+        "200":
+          description: The updated profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - profile
+                properties:
+                  profile:
+                    $ref: "#/components/schemas/Profile"
+        "400":
+          description: Malformed body or no field to change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Password change required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteOwnAccount
+      summary: Delete the caller's own account
+      description: Requires authentication. Removes the caller's vehicles, fuel
+        entries, tokens, sessions, and identities. Recorded in the audit log
+        without personal content. The last active admin cannot delete their own
+        account.
+      responses:
+        "204":
+          description: Account deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Password change required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: This is the last active admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /tokens:
     get:
       operationId: listApiTokens
@@ -265,6 +379,388 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /admin/users:
+    get:
+      operationId: adminListUsers
+      summary: List every account
+      description: Admin only. Accounts, roles, status, and a vehicle count. No fuel
+        entry data is ever included (INV-9).
+      responses:
+        "200":
+          description: Every account, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - users
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminUserListItem"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: adminCreateUser
+      summary: Create an account directly
+      description: Admin only (FR-8.3). Omit `password` to get a one-time set-password
+        link in the response instead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                role:
+                  type: string
+                  enum:
+                    - user
+                    - admin
+                  default: user
+                password:
+                  type: string
+                  minLength: 8
+              required:
+                - email
+                - displayName
+              additionalProperties: false
+      responses:
+        "201":
+          description: The new account
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    $ref: "#/components/schemas/AdminUserListItem"
+                  setPasswordToken:
+                    type: string
+                    description: Present when no password was supplied
+                  note:
+                    type: string
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/users/{id}:
+    get:
+      operationId: adminGetUser
+      summary: One account with security metadata
+      description: Admin only. Adds last sign-in, linked identities, and the active
+        API-token count. No fuel entry data is ever included (INV-9).
+      parameters:
+        - &a1
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The account
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    $ref: "#/components/schemas/AdminUserDetail"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: adminDeleteUser
+      summary: Delete an account and all its data
+      description: Admin only (FR-8.6). `confirmEmail` must equal the target's email.
+        Cascades vehicles, entries, tokens, sessions, identities. Refused for
+        the last active admin (INV-6).
+      parameters:
+        - *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirmEmail:
+                  type: string
+                  format: email
+              required:
+                - confirmEmail
+              additionalProperties: false
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          description: Missing or mismatched confirmEmail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: This is the last active admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/users/{id}/deactivate:
+    post:
+      operationId: adminDeactivateUser
+      summary: Deactivate an account
+      description: Admin only (FR-8.4). Cuts the user's sessions and API tokens
+        immediately. Refused for the last active admin (INV-6).
+      parameters:
+        - *a1
+      responses:
+        "204":
+          description: Done (idempotent)
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: This is the last active admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/users/{id}/reactivate:
+    post:
+      operationId: adminReactivateUser
+      summary: Reactivate an account
+      description: Admin only (FR-8.4).
+      parameters:
+        - *a1
+      responses:
+        "204":
+          description: Done (idempotent)
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: This is the last active admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/users/{id}/grant-admin:
+    post:
+      operationId: adminGrantAdmin
+      summary: Grant the admin role
+      description: Admin only (FR-8.7).
+      parameters:
+        - *a1
+      responses:
+        "204":
+          description: Done (idempotent)
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: This is the last active admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/users/{id}/revoke-admin:
+    post:
+      operationId: adminRevokeAdmin
+      summary: Revoke the admin role
+      description: Admin only (FR-8.7). Refused for the last active admin (INV-6).
+      parameters:
+        - *a1
+      responses:
+        "204":
+          description: Done (idempotent)
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: This is the last active admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/users/{id}/reset:
+    post:
+      operationId: adminTriggerReset
+      summary: Trigger a password reset for an account
+      description: Admin only (FR-8.5). Issues a reset link. The link is returned in
+        the response when email is not configured (R-2 interim).
+      parameters:
+        - *a1
+      responses:
+        "200":
+          description: Reset issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - sent
+                properties:
+                  sent:
+                    type: boolean
+                  resetToken:
+                    type: string
+                    description: Present when email is not configured
+                  note:
+                    type: string
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /openapi.yaml:
     get:
       operationId: getOpenApi
@@ -334,6 +830,99 @@ components:
             - admin
         mustChangePassword:
           type: boolean
+    Profile:
+      type: object
+      required:
+        - id
+        - email
+        - displayName
+        - role
+        - unitSystem
+        - timeZone
+        - currencyCode
+        - mustChangePassword
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        role:
+          type: string
+          enum:
+            - user
+            - admin
+        unitSystem:
+          type: string
+          enum:
+            - imperial
+            - metric
+        timeZone:
+          type: string
+          description: IANA time zone
+        currencyCode:
+          type: string
+          const: USD
+          description: Read-only in M1
+        mustChangePassword:
+          type: boolean
+    AdminUserListItem:
+      type: object
+      required:
+        - id
+        - email
+        - displayName
+        - role
+        - status
+        - createdAt
+        - vehicleCount
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        role:
+          type: string
+          enum:
+            - user
+            - admin
+        status:
+          type: string
+          enum:
+            - active
+            - deactivated
+        createdAt:
+          type: string
+          format: date-time
+        vehicleCount:
+          type: integer
+          minimum: 0
+    AdminUserDetail:
+      allOf:
+        - $ref: "#/components/schemas/AdminUserListItem"
+        - type: object
+          required:
+            - lastSignInAt
+            - linkedIdentities
+            - activeTokenCount
+          properties:
+            lastSignInAt:
+              type:
+                - string
+                - "null"
+              format: date-time
+            linkedIdentities:
+              type: array
+              items:
+                type: string
+            activeTokenCount:
+              type: integer
+              minimum: 0
     ApiToken:
       type: object
       required:

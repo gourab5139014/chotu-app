@@ -1,13 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return -- one repo layer over both Drizzle dialects; ports.ts is the typed boundary */
-import { and, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, sql } from "drizzle-orm";
+
+import { err } from "../domain/errors";
+import { newId } from "../domain/id";
 
 import { mappers } from "./schema/mappers";
 import * as pgSchema from "./schema/pg";
 import * as sqliteSchema from "./schema/sqlite";
 import type {
   ApiTokenRow,
+  AuditLogRow,
   DeploymentSettingsRow,
   NewApiToken,
+  NewAuditLog,
   NewSession,
   NewUser,
   NewUserToken,
@@ -17,6 +22,7 @@ import type {
   UserTokenRow,
 } from "./schema/types";
 import type { Adapter, DbHandle } from "./index";
+import type { Tx } from "./uow";
 import type { Repos } from "../domain/ports";
 
 const SINGLETON = "singleton";
@@ -265,6 +271,230 @@ export function makeRepos(handle: DbHandle): Repos {
         );
         return rows.length;
       },
+      async latestActivityForUser(userId) {
+        const rows = await db
+          .select({ lastSeenAt: s.session.lastSeenAt })
+          .from(s.session)
+          .where(eq(s.session.userId, userId))
+          .orderBy(desc(s.session.lastSeenAt))
+          .limit(1);
+        const v = rows[0]?.lastSeenAt;
+        return v == null ? null : v instanceof Date ? v : new Date(v);
+      },
+    },
+
+    audit: {
+      async record(entry: NewAuditLog) {
+        const row = buildAuditRow(entry);
+        await db.insert(s.auditLog).values(mappers.auditLog.toRow(row, a));
+        return row;
+      },
+      async list(filter = {}) {
+        const clauses = [];
+        if (filter.targetType != null) {
+          clauses.push(eq(s.auditLog.targetType, filter.targetType));
+        }
+        if (filter.targetId != null) {
+          clauses.push(eq(s.auditLog.targetId, filter.targetId));
+        }
+        let q = db.select().from(s.auditLog);
+        if (clauses.length > 0) q = q.where(and(...clauses));
+        q = q.orderBy(desc(s.auditLog.createdAt), desc(s.auditLog.id));
+        if (filter.limit != null) q = q.limit(filter.limit);
+        const rows = await q;
+        return rows.map((r: any) => mappers.auditLog.toDomain(r));
+      },
+      async count() {
+        const rows = await db
+          .select({ n: sql<number>`count(*)` })
+          .from(s.auditLog);
+        return Number(rows[0]?.n ?? 0);
+      },
     },
   };
+}
+
+/**
+ * Count `role = 'admin' AND status = 'active'` users on an open transaction.
+ * Use it under `tx.lockSettings` for the INV-6 / FR-7.4 last-admin guard.
+ * Synchronous on SQLite, a promise on PostgreSQL.
+ */
+export function countActiveAdminsInTx(tx: Tx): number | Promise<number> {
+  const q = sql`select count(*) as n from "user" where role = 'admin' and status = 'active'`;
+  if (tx.dialect === "postgres") {
+    return tx.db.execute(q).then((rows) => Number((rows[0] as any)?.n ?? 0));
+  }
+  return Number((tx.db.all(q)[0] as any)?.n ?? 0);
+}
+
+/** Delete a user row on an open transaction. FK cascades take the dependents. */
+export function deleteUserInTx(tx: Tx, userId: string): void | Promise<void> {
+  if (tx.dialect === "postgres") {
+    return tx.db
+      .delete(pgSchema.user)
+      .where(eq(pgSchema.user.id, userId))
+      .then(() => undefined);
+  }
+  tx.db.delete(sqliteSchema.user).where(eq(sqliteSchema.user.id, userId)).run();
+}
+
+/** Fill `id` and `createdAt` for an audit entry. */
+function buildAuditRow(entry: NewAuditLog): AuditLogRow {
+  return {
+    id: entry.id ?? newId(),
+    actorUserId: entry.actorUserId,
+    action: entry.action,
+    targetType: entry.targetType,
+    targetId: entry.targetId,
+    summary: entry.summary,
+    metadata: entry.metadata,
+    ip: entry.ip,
+    createdAt: new Date(),
+  };
+}
+
+/**
+ * Insert one `audit_log` row on an open transaction. Call it from inside a
+ * `uow.run` callback so the row commits or rolls back with the mutation it
+ * records (plan section 4, AC-9).
+ *
+ * SQLite runs synchronously and returns the row. PostgreSQL returns a promise
+ * for the row. A caller that serves both dialects writes a synchronous uow
+ * callback and `return`s this value: on SQLite the uow sees a plain row, on
+ * PostgreSQL a promise it awaits.
+ */
+export function writeAuditInTx(
+  tx: Tx,
+  entry: NewAuditLog,
+): AuditLogRow | Promise<AuditLogRow> {
+  const row = buildAuditRow(entry);
+  if (tx.dialect === "postgres") {
+    return tx.db
+      .insert(pgSchema.auditLog)
+      .values(mappers.auditLog.toRow(row, "postgres") as any)
+      .then(() => row);
+  }
+  tx.db
+    .insert(sqliteSchema.auditLog)
+    .values(mappers.auditLog.toRow(row, "sqlite") as any)
+    .run();
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// Transaction helpers for the admin mutation routes (slice 5c).
+//
+// Each returns `void` synchronously on SQLite and a `Promise<void>` on
+// PostgreSQL. Pass them as steps to `runTxSteps` (uow.ts), which hides the
+// dialect split. A step may throw to roll the whole uow back.
+// ---------------------------------------------------------------------------
+
+/** The schema module for a transaction's dialect, loosely typed like `makeRepos`. */
+function txParts(tx: Tx): { db: any; s: typeof sqliteSchema; a: Adapter } {
+  const s: typeof sqliteSchema =
+    tx.dialect === "postgres"
+      ? (pgSchema as unknown as typeof sqliteSchema)
+      : sqliteSchema;
+  return { db: tx.db as any, s, a: tx.dialect };
+}
+
+/** Await on Postgres, no-op on SQLite (the builder already ran). */
+function settle(tx: Tx, builder: any): void | Promise<void> {
+  if (tx.dialect === "postgres") return builder.then(() => undefined);
+  builder.run();
+}
+
+/** Insert a fully-formed user row. */
+export function insertUserInTx(tx: Tx, row: UserRow): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  return settle(tx, db.insert(s.user).values(mappers.user.toRow(row, a)));
+}
+
+/** Patch a user row by id. `updatedAt` is set here. */
+export function updateUserInTx(
+  tx: Tx,
+  id: string,
+  patch: Partial<UserRow>,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.user.toRow({ ...patch, updatedAt: new Date() }, a);
+  return settle(tx, db.update(s.user).set(values).where(eq(s.user.id, id)));
+}
+
+/** Revoke every live session for a user. */
+export function revokeUserSessionsInTx(
+  tx: Tx,
+  userId: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const value = a === "sqlite" ? at.toISOString() : at;
+  return settle(
+    tx,
+    db
+      .update(s.session)
+      .set({ revokedAt: value })
+      .where(and(eq(s.session.userId, userId), isNull(s.session.revokedAt))),
+  );
+}
+
+/** Revoke every live API token for a user. */
+export function revokeUserApiTokensInTx(
+  tx: Tx,
+  userId: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const value = a === "sqlite" ? at.toISOString() : at;
+  return settle(
+    tx,
+    db
+      .update(s.apiToken)
+      .set({ revokedAt: value })
+      .where(and(eq(s.apiToken.userId, userId), isNull(s.apiToken.revokedAt))),
+  );
+}
+
+/**
+ * Issue a `user_token`, first clearing any unused token of the same purpose
+ * for that user (mirrors `repos.userTokens.issue`).
+ */
+export function issueUserTokenInTx(
+  tx: Tx,
+  row: UserTokenRow,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const clearWhere = and(
+    eq(s.userToken.userId, row.userId),
+    eq(s.userToken.purpose, row.purpose),
+    isNull(s.userToken.usedAt),
+  );
+  if (tx.dialect === "postgres") {
+    return db
+      .delete(s.userToken)
+      .where(clearWhere)
+      .then(() =>
+        db.insert(s.userToken).values(mappers.userToken.toRow(row, a)),
+      )
+      .then(() => undefined);
+  }
+  db.delete(s.userToken).where(clearWhere).run();
+  db.insert(s.userToken).values(mappers.userToken.toRow(row, a)).run();
+}
+
+/**
+ * INV-6 / FR-7.4 guard. Throw `last_admin` when the mutation would remove the
+ * deployment's last active admin. Call it as the first `runTxSteps` step, with
+ * `{ settings: true }` so the count is serialised.
+ */
+export function guardLastAdminInTx(tx: Tx, target: UserRow): unknown {
+  if (target.role !== "admin" || target.status !== "active") return undefined;
+  const n = countActiveAdminsInTx(tx);
+  if (typeof n === "number") {
+    if (n <= 1) throw err.lastAdmin();
+    return undefined;
+  }
+  return n.then((count) => {
+    if (count <= 1) throw err.lastAdmin();
+  });
 }

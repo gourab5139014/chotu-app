@@ -48,6 +48,34 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
   );
 }
 
+/**
+ * Run an ordered list of transaction steps in one `uow.run`.
+ *
+ * Each step calls the dialect-agnostic `*InTx` helpers (sync on SQLite, a
+ * promise on PostgreSQL) and may throw to abort and roll the whole
+ * transaction back. This hides the "SQLite callback must be synchronous" split
+ * from the caller: on PostgreSQL the steps are chained with `await`, on SQLite
+ * they run in order and a step that returns a promise fails fast with
+ * `UnitOfWorkAsyncError`.
+ */
+export function runTxSteps(
+  uow: UnitOfWork,
+  locks: UowLocks,
+  steps: ReadonlyArray<(tx: Tx) => unknown>,
+): Promise<void> {
+  return uow.run(locks, (tx) => {
+    if (tx.dialect === "postgres") {
+      let chain: Promise<unknown> = Promise.resolve();
+      for (const step of steps) chain = chain.then(() => step(tx));
+      return chain.then(() => undefined);
+    }
+    for (const step of steps) {
+      if (isThenable(step(tx))) throw new UnitOfWorkAsyncError();
+    }
+    return undefined;
+  });
+}
+
 export function makeUnitOfWork(handle: DbHandle): UnitOfWork {
   if (handle.dialect === "postgres") {
     const { db } = handle;

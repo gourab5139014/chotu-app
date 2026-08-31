@@ -5,9 +5,10 @@ import * as sqliteSchema from "../../src/db/schema/sqlite";
 import type { DbHandle } from "../../src/db/index";
 
 import { clean, type CleanFixture } from "../fixtures/clean";
+import { lastAdmin, type LastAdminFixture } from "../fixtures/last-admin";
 
-export { clean };
-export type { CleanFixture };
+export { clean, lastAdmin };
+export type { CleanFixture, LastAdminFixture };
 
 /**
  * Seed a fixture into a migrated database with the full-privilege test
@@ -31,4 +32,24 @@ export async function loadClean(handle: DbHandle): Promise<CleanFixture> {
     await db.insert(s.user).values(mappers.user.toRow(u, a));
   }
   return clean;
+}
+
+/** Seed the `last-admin` fixture (INV-6 tests). */
+export async function loadLastAdmin(
+  handle: DbHandle,
+): Promise<LastAdminFixture> {
+  const db: any = handle.db;
+  const a = handle.dialect;
+  const s: typeof sqliteSchema =
+    a === "postgres"
+      ? (pgSchema as unknown as typeof sqliteSchema)
+      : sqliteSchema;
+
+  await db
+    .insert(s.deploymentSettings)
+    .values(mappers.deploymentSettings.toRow(lastAdmin.settings, a));
+  for (const u of [...lastAdmin.admins, lastAdmin.regular]) {
+    await db.insert(s.user).values(mappers.user.toRow(u, a));
+  }
+  return lastAdmin;
 }

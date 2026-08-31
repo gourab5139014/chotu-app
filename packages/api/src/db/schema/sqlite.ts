@@ -151,3 +151,24 @@ export const session = sqliteTable(
   },
   (t) => [uniqueIndex("session_hash_uq").on(t.tokenHash)],
 );
+
+export const auditLog = sqliteTable(
+  "audit_log",
+  {
+    id: f.uuidPk().sqlite,
+    actorUserId: f
+      .uuidRef("actor_user_id")
+      .sqlite.references(() => user.id, { onDelete: "set null" }),
+    action: f.text("action").sqlite.notNull(),
+    targetType: f.text("target_type").sqlite,
+    targetId: f.text("target_id").sqlite,
+    summary: f.text("summary").sqlite.notNull(),
+    metadata: f.json("metadata").sqlite,
+    ip: f.text("ip").sqlite,
+    createdAt: f.timestamptz("created_at").sqlite.notNull(),
+  },
+  (t) => [
+    index("audit_log_created_at_ix").on(t.createdAt),
+    index("audit_log_target_ix").on(t.targetType, t.targetId),
+  ],
+);
