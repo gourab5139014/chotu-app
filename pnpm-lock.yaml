@@ -12,13 +12,57 @@ importers:
         specifier: 5.7.3
         version: 5.7.3
 
+  packages/api:
+    dependencies:
+      '@hono/node-server':
+        specifier: 1.14.1
+        version: 1.14.1(hono@4.7.4)
+      hono:
+        specifier: 4.7.4
+        version: 4.7.4
+    devDependencies:
+      '@types/node':
+        specifier: 20.17.19
+        version: 20.17.19
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+
 packages:
+
+  '@hono/node-server@1.14.1':
+    resolution: {integrity: sha512-vmbuM+HPinjWzPe7FFPWMMQMsbKE9gDPhaH0FFdqbGpkT5lp++tcWDTxwBl5EgS5y6JVgIaCdjeHRfQ4XRBRjQ==}
+    engines: {node: '>=18.14.1'}
+    peerDependencies:
+      hono: ^4
+
+  '@types/node@20.17.19':
+    resolution: {integrity: sha512-LEwC7o1ifqg/6r2gn9Dns0f1rhK+fPFDoMiceTJ6kWmVk6bgXBI/9IOWfVan4WiAavK9pIVWdX0/e3J+eEUh5A==}
+
+  hono@4.7.4:
+    resolution: {integrity: sha512-Pst8FuGqz3L7tFF+u9Pu70eI0xa5S3LPUmrNd5Jm8nTHze9FxLTK9Kaj5g/k4UcwuJSXTP65SyHOPLrffpcAJg==}
+    engines: {node: '>=16.9.0'}
 
   typescript@5.7.3:
     resolution: {integrity: sha512-84MVSjMEHP+FQRPy3pX9sTVV/INIex71s9TL2Gm5FG/WG1SqXeKyZ0k7/blY/4FdOzI12CBy1vGc4og/eus0fw==}
     engines: {node: '>=14.17'}
     hasBin: true
 
+  undici-types@6.19.8:
+    resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
+
 snapshots:
 
+  '@hono/node-server@1.14.1(hono@4.7.4)':
+    dependencies:
+      hono: 4.7.4
+
+  '@types/node@20.17.19':
+    dependencies:
+      undici-types: 6.19.8
+
+  hono@4.7.4: {}
+
   typescript@5.7.3: {}
+
+  undici-types@6.19.8: {}

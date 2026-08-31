@@ -1,0 +1,27 @@
+{
+  "name": "@chotu/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "bin": {
+    "chotu": "./dist/bin/chotu.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --build",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "1.14.1",
+    "hono": "4.7.4"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.19",
+    "typescript": "5.7.3"
+  }
+}

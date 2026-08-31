@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T1.1
-- **Next task:** T1.2
+- **Last completed task:** T1.2
+- **Next task:** T1.3
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -36,9 +36,12 @@ pause with almost no rework.
 - [x] **T1.1** Workspace root: `package.json`, `pnpm-workspace.yaml`,
   `tsconfig.base.json` (strict, NodeNext, ES2022), `.nvmrc` = 20.
   *done when:* `pnpm -w install` succeeds; `pnpm -w exec tsc --version` prints.
-- [ ] **T1.2** `packages/api` scaffold: `package.json`, `tsconfig.json` extending
+- [x] **T1.2** `packages/api` scaffold: `package.json`, `tsconfig.json` extending
   base, `src/index.ts` + `src/app.ts` stubs.
   *done when:* `pnpm --filter @chotu/api exec tsc --noEmit` passes.
+  *note:* adding deps needs `rm -rf node_modules && pnpm install --force` in this
+  sandbox — incremental install leaves the lockfile updated but `node_modules`
+  unmaterialised.
 - [ ] **T1.3** ESLint flat config with `typescript-eslint`; a local rule module
   stub `no-unscoped-entity-query` (reports nothing yet).
   *done when:* `pnpm -w run lint` passes.
