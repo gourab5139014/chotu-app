@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T4.1
-- **Next task:** T4.3
+- **Last completed task:** T4.3
+- **Next task:** T4.4
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -133,7 +133,7 @@ pause with almost no rework.
 - [x] **T4.2** `domain/errors.ts` closed union + HTTP mapping table from
   `plan.md` section 12.
   *done when:* a test enumerates every code and its status.
-- [ ] **T4.3** Password sign-in (`@node-rs/argon2`), `session` create (`chs_`),
+- [x] **T4.3** Password sign-in (`@node-rs/argon2`), `session` create (`chs_`),
   cookie + response-body credential (Q-11). Generic failure message.
   *done when:* a good sign-in returns a session; a wrong password returns the
   same generic `401`; rate-limit not yet required here.

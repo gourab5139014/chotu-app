@@ -4,6 +4,9 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 export const SESSION_PREFIX = "chs_";
 export const API_TOKEN_PREFIX = "cht_";
 
+/** Name of the browser session cookie. */
+export const SESSION_COOKIE = "chotu_session";
+
 /** A prefixed, URL-safe, 256-bit random credential. Shown once, stored hashed. */
 export function generateCredential(prefix: string): string {
   return `${prefix}${randomBytes(32).toString("base64url")}`;

@@ -6,6 +6,7 @@ import type { AppDeps, AppHono } from "./http/context";
 import { onError, onNotFound } from "./middleware/error";
 import { logging } from "./middleware/logging";
 import { requestId } from "./middleware/request-id";
+import { authRoutes } from "./routes/auth";
 
 /**
  * Build the Chotu HTTP app. Resource routes are added slice by slice; this
@@ -30,6 +31,8 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
   app.get("/healthz", (c) =>
     c.json({ status: "ok", schemaVersion: CURRENT_SCHEMA_VERSION }),
   );
+
+  app.route("/auth", authRoutes(deps));
 
   return app;
 }
