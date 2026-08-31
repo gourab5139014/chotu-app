@@ -57,7 +57,7 @@ The API is the product. Every client is equal and talks to the API over HTTP.
 - Vehicle creation and editing. Multiple vehicles per user.
 - Manual fuel-entry logging: date, odometer, volume, total cost, notes.
 - Entry history with edit and delete.
-- Consistent unit conversion and a per-user currency setting.
+- Consistent unit conversion. A per-user currency setting, fixed to USD in M1.
 - Per-user data export and reconciliation checks.
 
 **Deferred until the core loop is validated**
@@ -82,7 +82,7 @@ The API is the product. Every client is equal and talks to the API over HTTP.
 | API contract | OpenAPI 3.1, authored with `@hono/zod-openapi` | One Zod schema per payload. The spec is generated from code, so they cannot drift. A published OpenAPI document also lets an LLM chat client drive the API. |
 | Auth: identity | OIDC — Authorization Code with PKCE for browsers, Device Authorization Grant for the CLI and agents. Plus email and password. | Reuse existing identities and support browserless clients. No SAML in this scope. |
 | Auth: API credential | Per-user API token. Bearer only. Stored as a hash. | A token suits a script, the CLI, or an LLM chat client. The API never sees a password after sign-in. |
-| Auth: sessions | Server-side sessions for browser clients. Opaque session id in an HttpOnly cookie. | Simple to revoke. No token parsing on the client. |
+| Auth: sessions | Server-side sessions. Opaque session id in an HttpOnly cookie for browsers, and returned in the sign-in response body so a non-browser client can send it as a bearer value. | Simple to revoke. No token parsing on the client. Works headless (Q-11). |
 | Registration | Invite-only by default. Open sign-up and SSO auto-provisioning are per-deployment admin toggles. | Safe default for a self-hosted instance with no extra anti-abuse work. |
 | Frontend | Vite + React, mobile-first SPA | Separate deployable. Talks to the API only over HTTP. Built after the API workflow runs in production. |
 | CLI | `chotu`, ships in M1.5 | First-party client. Authenticates with an API token or the OIDC Device Grant. Machine-readable output. |
