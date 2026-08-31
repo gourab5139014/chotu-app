@@ -1,0 +1,28 @@
+name: Auto Approve PR
+
+# Automatically approves pull requests opened by the repository owner.
+# Mirrors the same workflow in gourab5139014/crunch-my-car.
+# The review is posted as github-actions[bot], so it registers as an
+# approval even though a user cannot approve their own PR in the UI.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+concurrency:
+  group: auto-approve-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    if: github.actor == 'gourab5139014'
+    steps:
+      - name: Approve PR
+        run: gh pr review "$PR_URL" --approve
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
