@@ -1,13 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return -- one repo layer over both Drizzle dialects; ports.ts is the typed boundary */
-import { and, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, sql } from "drizzle-orm";
+
+import { newId } from "../domain/id";
 
 import { mappers } from "./schema/mappers";
 import * as pgSchema from "./schema/pg";
 import * as sqliteSchema from "./schema/sqlite";
 import type {
   ApiTokenRow,
+  AuditLogRow,
   DeploymentSettingsRow,
   NewApiToken,
+  NewAuditLog,
   NewSession,
   NewUser,
   NewUserToken,
@@ -17,6 +21,7 @@ import type {
   UserTokenRow,
 } from "./schema/types";
 import type { Adapter, DbHandle } from "./index";
+import type { Tx } from "./uow";
 import type { Repos } from "../domain/ports";
 
 const SINGLETON = "singleton";
@@ -266,5 +271,77 @@ export function makeRepos(handle: DbHandle): Repos {
         return rows.length;
       },
     },
+
+    audit: {
+      async record(entry: NewAuditLog) {
+        const row = buildAuditRow(entry);
+        await db.insert(s.auditLog).values(mappers.auditLog.toRow(row, a));
+        return row;
+      },
+      async list(filter = {}) {
+        const clauses = [];
+        if (filter.targetType != null) {
+          clauses.push(eq(s.auditLog.targetType, filter.targetType));
+        }
+        if (filter.targetId != null) {
+          clauses.push(eq(s.auditLog.targetId, filter.targetId));
+        }
+        let q = db.select().from(s.auditLog);
+        if (clauses.length > 0) q = q.where(and(...clauses));
+        q = q.orderBy(desc(s.auditLog.createdAt), desc(s.auditLog.id));
+        if (filter.limit != null) q = q.limit(filter.limit);
+        const rows = await q;
+        return rows.map((r: any) => mappers.auditLog.toDomain(r));
+      },
+      async count() {
+        const rows = await db
+          .select({ n: sql<number>`count(*)` })
+          .from(s.auditLog);
+        return Number(rows[0]?.n ?? 0);
+      },
+    },
   };
+}
+
+/** Fill `id` and `createdAt` for an audit entry. */
+function buildAuditRow(entry: NewAuditLog): AuditLogRow {
+  return {
+    id: entry.id ?? newId(),
+    actorUserId: entry.actorUserId,
+    action: entry.action,
+    targetType: entry.targetType,
+    targetId: entry.targetId,
+    summary: entry.summary,
+    metadata: entry.metadata,
+    ip: entry.ip,
+    createdAt: new Date(),
+  };
+}
+
+/**
+ * Insert one `audit_log` row on an open transaction. Call it from inside a
+ * `uow.run` callback so the row commits or rolls back with the mutation it
+ * records (plan section 4, AC-9).
+ *
+ * SQLite runs synchronously and returns the row. PostgreSQL returns a promise
+ * for the row. A caller that serves both dialects writes a synchronous uow
+ * callback and `return`s this value: on SQLite the uow sees a plain row, on
+ * PostgreSQL a promise it awaits.
+ */
+export function writeAuditInTx(
+  tx: Tx,
+  entry: NewAuditLog,
+): AuditLogRow | Promise<AuditLogRow> {
+  const row = buildAuditRow(entry);
+  if (tx.dialect === "postgres") {
+    return tx.db
+      .insert(pgSchema.auditLog)
+      .values(mappers.auditLog.toRow(row, "postgres") as any)
+      .then(() => row);
+  }
+  tx.db
+    .insert(sqliteSchema.auditLog)
+    .values(mappers.auditLog.toRow(row, "sqlite") as any)
+    .run();
+  return row;
 }

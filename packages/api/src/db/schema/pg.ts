@@ -145,3 +145,24 @@ export const session = pgTable(
   },
   (t) => [uniqueIndex("session_hash_uq").on(t.tokenHash)],
 );
+
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: f.uuidPk().pg,
+    actorUserId: f
+      .uuidRef("actor_user_id")
+      .pg.references(() => user.id, { onDelete: "set null" }),
+    action: f.text("action").pg.notNull(),
+    targetType: f.text("target_type").pg,
+    targetId: f.text("target_id").pg,
+    summary: f.text("summary").pg.notNull(),
+    metadata: f.json("metadata").pg,
+    ip: f.text("ip").pg,
+    createdAt: f.timestamptz("created_at").pg.notNull(),
+  },
+  (t) => [
+    index("audit_log_created_at_ix").on(t.createdAt),
+    index("audit_log_target_ix").on(t.targetType, t.targetId),
+  ],
+);

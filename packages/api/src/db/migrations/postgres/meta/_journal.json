@@ -15,6 +15,13 @@
       "when": 1788157669402,
       "tag": "0001_curious_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788205142794,
+      "tag": "0002_talented_jazinda",
+      "breakpoints": true
     }
   ]
 }

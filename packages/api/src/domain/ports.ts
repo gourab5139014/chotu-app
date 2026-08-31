@@ -8,8 +8,10 @@
  */
 import type {
   ApiTokenRow,
+  AuditLogRow,
   DeploymentSettingsRow,
   NewApiToken,
+  NewAuditLog,
   NewSession,
   NewUser,
   NewUserToken,
@@ -69,6 +71,22 @@ export interface SessionRepo {
   deleteExpired(now: Date): Promise<number>;
 }
 
+export interface AuditRepo {
+  /**
+   * Append one audit row on the outer connection. When the row must commit or
+   * roll back with a mutation, use `writeAuditInTx` inside that `uow.run`
+   * instead (plan section 4, AC-9).
+   */
+  record(entry: NewAuditLog): Promise<AuditLogRow>;
+  /** Newest first. Optional exact-match filter on the target. */
+  list(filter?: {
+    targetType?: string;
+    targetId?: string;
+    limit?: number;
+  }): Promise<AuditLogRow[]>;
+  count(): Promise<number>;
+}
+
 export interface Repos {
   readonly schemaMeta: SchemaMetaRepo;
   readonly settings: SettingsRepo;
@@ -76,4 +94,5 @@ export interface Repos {
   readonly userTokens: UserTokenRepo;
   readonly apiTokens: ApiTokenRepo;
   readonly sessions: SessionRepo;
+  readonly audit: AuditRepo;
 }

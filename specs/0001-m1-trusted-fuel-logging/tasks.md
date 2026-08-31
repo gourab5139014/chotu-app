@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T4.8 (slice 4 complete)
-- **Next task:** T5a.1
+- **Last completed task:** T5a.1
+- **Next task:** T5a.2
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -162,8 +162,8 @@ pause with almost no rework.
 
 ## Slice 5a — User profile + audit
 
-- [ ] **T5a.1** `audit_log` table (both dialects) + `AuditRepo`; the audit
-  `INSERT` runs inside the caller's `uow.run`.
+- [x] **T5a.1** `audit_log` table (both dialects) + `AuditRepo`; the audit
+  `INSERT` runs inside the caller's `uow.run` (`writeAuditInTx`).
   *done when:* `drizzle-kit check` green both dialects; a test shows the audit
   row rolls back with a failed mutation.
 - [ ] **T5a.2** `test/support` audit-delta helper: wrap a call, assert

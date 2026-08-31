@@ -90,6 +90,21 @@ export interface SessionRow {
   ip: string | null;
 }
 
+export interface AuditLogRow {
+  id: string;
+  /** The admin or user who acted. Null for a system action. */
+  actorUserId: string | null;
+  /** Stable code, for example `user.invited` or `role.granted`. */
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  summary: string;
+  /** Structured detail. Never a secret. */
+  metadata: Record<string, unknown> | null;
+  ip: string | null;
+  createdAt: Date;
+}
+
 /** Insert shapes: audit timestamps are set by the repository, not the caller. */
 export type NewUser = Omit<UserRow, "createdAt" | "updatedAt">;
 export type NewUserToken = Omit<UserTokenRow, "createdAt" | "usedAt"> & {
@@ -100,3 +115,7 @@ export type NewApiToken = Omit<
   "createdAt" | "lastUsedAt" | "revokedAt"
 >;
 export type NewSession = Omit<SessionRow, "createdAt" | "lastSeenAt">;
+/** `id` is optional here — the repository fills it when absent. */
+export type NewAuditLog = Omit<AuditLogRow, "id" | "createdAt"> & {
+  id?: string;
+};
