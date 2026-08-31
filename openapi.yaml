@@ -1,0 +1,373 @@
+openapi: 3.1.0
+info:
+  title: Chotu API
+  version: 0.1.0
+  description: "Chotu is an open-source, self-hostable vehicle fuel log. This is
+    the M1 auth surface. Every error uses the shared Error schema: a stable
+    `code`, a human `message`, and optional `details`."
+  license:
+    name: AGPL-3.0-only
+    identifier: AGPL-3.0-only
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Liveness and applied schema version
+      description: Unauthenticated. Reports that the API is up.
+      security: []
+      responses:
+        "200":
+          description: The service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - schemaVersion
+                properties:
+                  status:
+                    type: string
+                    const: ok
+                  schemaVersion:
+                    type: integer
+                    const: 1
+  /auth/sign-in:
+    post:
+      operationId: signIn
+      summary: Sign in with email and password
+      description: Returns a session credential and sets an HttpOnly cookie. A wrong
+        email or password returns the same generic 401. Rate limited per IP and
+        per account.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 1
+              required:
+                - email
+                - password
+              additionalProperties: false
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                  - session
+                  - expiresAt
+                properties:
+                  user:
+                    $ref: "#/components/schemas/PublicUser"
+                  session:
+                    type: string
+                    description: Session credential
+                  expiresAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Wrong email or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limited; see Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /auth/sign-out:
+    post:
+      operationId: signOut
+      summary: Revoke the current session
+      description: Requires authentication. Clears the session cookie.
+      responses:
+        "204":
+          description: Signed out
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      summary: Change the password by supplying the current one
+      description: Requires authentication (a session or an API token). Clears the
+        must-change-password flag on success.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currentPassword:
+                  type: string
+                  minLength: 1
+                newPassword:
+                  type: string
+                  minLength: 8
+              required:
+                - currentPassword
+                - newPassword
+              additionalProperties: false
+      responses:
+        "204":
+          description: Password changed
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Current password is wrong or not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /auth/me:
+    get:
+      operationId: getMe
+      summary: The signed-in user
+      description: Requires authentication. A must-change-password user is refused
+        with 403 until the password is changed.
+      responses:
+        "200":
+          description: The current user
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    $ref: "#/components/schemas/PublicUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Password change required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /tokens:
+    get:
+      operationId: listApiTokens
+      summary: List the caller's API tokens
+      description: Requires authentication. Never returns the token value.
+      responses:
+        "200":
+          description: The caller's tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - tokens
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiToken"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createApiToken
+      summary: Create an API token
+      description: Requires authentication. The plaintext token is returned once and
+        then only stored hashed.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                  maxLength: 100
+              additionalProperties: false
+      responses:
+        "201":
+          description: The new token, shown once
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - token
+                  - note
+                properties:
+                  token:
+                    type: string
+                  note:
+                    type: string
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /tokens/{id}:
+    delete:
+      operationId: revokeApiToken
+      summary: Revoke one of the caller's API tokens
+      description: Requires authentication. A token the caller does not own is 404.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Revoked (or already revoked)
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such token for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /openapi.yaml:
+    get:
+      operationId: getOpenApi
+      summary: This document
+      description: Unauthenticated.
+      security: []
+      responses:
+        "200":
+          description: The OpenAPI document, as YAML
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: chotu_session
+  schemas:
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum:
+            - validation_error
+            - unauthorized
+            - forbidden
+            - password_change_required
+            - not_found
+            - email_taken
+            - invitation_consumed
+            - conflict
+            - odometer_decrease
+            - last_admin
+            - auth_method_required
+            - rate_limited
+            - internal_error
+        message:
+          type: string
+        details:
+          description: Optional structured detail
+    PublicUser:
+      type: object
+      required:
+        - id
+        - email
+        - displayName
+        - role
+        - mustChangePassword
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        role:
+          type: string
+          enum:
+            - user
+            - admin
+        mustChangePassword:
+          type: boolean
+    ApiToken:
+      type: object
+      required:
+        - id
+        - label
+        - createdAt
+        - lastUsedAt
+        - expiresAt
+        - revokedAt
+      properties:
+        id:
+          type: string
+        label:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        expiresAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        revokedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+security:
+  - bearerAuth: []
+  - cookieAuth: []

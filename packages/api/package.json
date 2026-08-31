@@ -26,7 +26,9 @@
     "postgres": "3.4.5",
     "zod": "3.24.2",
     "@node-rs/argon2": "2.0.2",
-    "uuidv7": "1.0.2"
+    "uuidv7": "1.0.2",
+    "zod-to-json-schema": "3.24.1",
+    "yaml": "2.7.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.12",

@@ -8,7 +8,9 @@ import { parseJson } from "../http/validate";
 import { protect } from "../middleware/protect";
 import type { ApiTokenRow } from "../db/schema/types";
 
-const CreateBody = z.object({ label: z.string().max(100).optional() });
+export const TokenCreateBody = z.object({
+  label: z.string().max(100).optional(),
+});
 
 function publicToken(t: ApiTokenRow) {
   return {
@@ -30,7 +32,7 @@ export function tokenRoutes(deps: AppDeps): Hono<AppHono> {
   r.post("/", async (c) => {
     const user = c.get("user");
     if (user == null) throw err.unauthorized();
-    const { label } = await parseJson(c, CreateBody);
+    const { label } = await parseJson(c, TokenCreateBody);
     const { token } = await issueApiToken(deps.handle, {
       userEmail: user.email,
       ...(label != null ? { label } : {}),

@@ -16,12 +16,12 @@ import { protect } from "../middleware/protect";
 import { clientIp } from "../middleware/rate-limit";
 import type { UserRow } from "../db/schema/types";
 
-const SignInBody = z.object({
+export const SignInBody = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
 
-const ChangePasswordBody = z.object({
+export const ChangePasswordBody = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8),
 });

@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
+import { stringify } from "yaml";
+
+import { buildOpenApiDocument } from "./contract/build";
 import { CURRENT_SCHEMA_VERSION } from "./db/schema/version";
 import type { AppDeps, AppHono } from "./http/context";
 import { onError, onNotFound } from "./middleware/error";
@@ -31,6 +34,11 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
 
   app.get("/healthz", (c) =>
     c.json({ status: "ok", schemaVersion: CURRENT_SCHEMA_VERSION }),
+  );
+
+  const openApiYaml = stringify(buildOpenApiDocument());
+  app.get("/openapi.yaml", (c) =>
+    c.body(openApiYaml, 200, { "content-type": "application/yaml" }),
   );
 
   app.route("/auth", authRoutes(deps));

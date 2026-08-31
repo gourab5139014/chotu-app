@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T4.7
-- **Next task:** T4.8
+- **Last completed task:** T4.8 (slice 4 complete)
+- **Next task:** T5a.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -153,7 +153,7 @@ pause with almost no rework.
   `TRUSTED_PROXY` handling, `429` + `Retry-After`) on sign-in and the reset and
   invite routes when they land.
   *done when:* a burst past the draft threshold returns `429` with the header.
-- [ ] **T4.8** OpenAPI pipeline: `contract/build.ts`, `pnpm openapi:write`
+- [x] **T4.8** OpenAPI pipeline: `contract/build.ts`, `pnpm openapi:write`
   writes `openapi.yaml`, `GET /openapi.yaml` and `GET /healthz` served
   unauthenticated (FR-19). CI OpenAPI gates go live; add the `BREAKING-OPENAPI:`
   trailer check to `oasdiff`.

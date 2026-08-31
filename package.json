@@ -14,7 +14,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "db:check": "pnpm --filter @chotu/api run db:check",
-    "openapi:write": "echo \"no openapi yet\"",
+    "openapi:write": "pnpm --filter @chotu/api exec tsx scripts/write-openapi.ts",
     "verify": "pnpm run typecheck && pnpm run lint && pnpm run db:check && pnpm run test"
   },
   "devDependencies": {
