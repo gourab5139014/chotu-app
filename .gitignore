@@ -5,9 +5,11 @@ node_modules/
 
 # Build output
 dist/
+dist-test/
 build/
 .next/
 out/
+*.tsbuildinfo
 
 # Environment
 .env
@@ -29,3 +31,8 @@ pnpm-debug.log*
 
 # Test / coverage
 coverage/
+
+# Local SQLite
+*.db
+*.db-shm
+*.db-wal

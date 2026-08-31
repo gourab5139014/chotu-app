@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** none
-- **Next task:** T1.1
+- **Last completed task:** T4.8 (slice 4 complete)
+- **Next task:** T5a.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -33,124 +33,127 @@ pause with almost no rework.
 
 ## Slice 1 — Workspace + skeleton
 
-- [ ] **T1.1** Workspace root: `package.json`, `pnpm-workspace.yaml`,
+- [x] **T1.1** Workspace root: `package.json`, `pnpm-workspace.yaml`,
   `tsconfig.base.json` (strict, NodeNext, ES2022), `.nvmrc` = 20.
   *done when:* `pnpm -w install` succeeds; `pnpm -w exec tsc --version` prints.
-- [ ] **T1.2** `packages/api` scaffold: `package.json`, `tsconfig.json` extending
+- [x] **T1.2** `packages/api` scaffold: `package.json`, `tsconfig.json` extending
   base, `src/index.ts` + `src/app.ts` stubs.
   *done when:* `pnpm --filter @chotu/api exec tsc --noEmit` passes.
-- [ ] **T1.3** ESLint flat config with `typescript-eslint`; a local rule module
+  *note:* adding deps needs `rm -rf node_modules && pnpm install --force` in this
+  sandbox — incremental install leaves the lockfile updated but `node_modules`
+  unmaterialised.
+- [x] **T1.3** ESLint flat config with `typescript-eslint`; a local rule module
   stub `no-unscoped-entity-query` (reports nothing yet).
   *done when:* `pnpm -w run lint` passes.
-- [ ] **T1.4** Vitest workspace config + one placeholder test in `packages/api`.
+- [x] **T1.4** Vitest workspace config + one placeholder test in `packages/api`.
   *done when:* `pnpm -w run test` green.
-- [ ] **T1.5** `src/env.ts`: zod schema for every var in `plan.md` section 16;
+- [x] **T1.5** `src/env.ts`: zod schema for every var in `plan.md` section 16;
   `.env.example` regenerated from it.
   *done when:* unit test parses a good env and rejects a missing
   `SESSION_SIGNING_KEY`.
-- [ ] **T1.6** `drizzle.pg.config.ts`, `drizzle.sqlite.config.ts`, empty
+- [x] **T1.6** `drizzle.pg.config.ts`, `drizzle.sqlite.config.ts`, empty
   `src/db/schema/{pg,sqlite}.ts`, empty migration dirs.
   *done when:* `drizzle-kit check` runs clean for both dialects (no tables yet).
-- [ ] **T1.7** Rewrite `.github/workflows/ci.yml` for pnpm; add the seven
+- [x] **T1.7** Rewrite `.github/workflows/ci.yml` for pnpm; add the seven
   section-15 jobs. Drizzle codegen/drift jobs active; OpenAPI jobs present but
   skip when `openapi.yaml` is absent.
   *done when:* CI is green on the push.
-- [ ] **T1.8** `pnpm -w run verify` script = typecheck + lint + both
+- [x] **T1.8** `pnpm -w run verify` script = typecheck + lint + both
   `drizzle-kit check` + test. Add `pnpm -w run openapi:write` placeholder.
   *done when:* `pnpm -w run verify` green.
 
 ## Slice 2 — DB foundation
 
-- [ ] **T2.1** `src/db/schema/fields.ts`: logical field helpers, each returning a
+- [x] **T2.1** `src/db/schema/fields.ts`: logical field helpers, each returning a
   `{ pg, sqlite }` column builder pair (uuid/text, timestamptz/ISO text,
   jsonb/text, `text[]`/JSON text, boolean, date, bigint→number).
   *done when:* unit test builds one table both ways and asserts column parity.
-- [ ] **T2.2** Tables in `pg.ts` and `sqlite.ts` from `fields.ts`:
+- [x] **T2.2** Tables in `pg.ts` and `sqlite.ts` from `fields.ts`:
   `deployment_settings`, `schema_meta` (both with the singleton guard),
   `user`, `user_token`, `api_token`, `session`. Constraints and indexes per
   `data-model.md`, incl. the `user_token` partial unique and the `user`
   `lower(email)` unique / `COLLATE NOCASE`.
   *done when:* `drizzle-kit generate` produces a first migration for each
   dialect; `drizzle-kit check` green for both.
-- [ ] **T2.3** `src/db/schema/types.ts`: canonical row/insert types for those
+- [x] **T2.3** `src/db/schema/types.ts`: canonical row/insert types for those
   tables. `src/db/schema/version.ts` with `SUPPORTED_SCHEMA_RANGE`.
   *done when:* `tsc --noEmit` passes; a type-level test pins the row shape.
-- [ ] **T2.4** Adapters: `src/db/adapters/postgres.ts` (postgres.js, `search_path`),
+- [x] **T2.4** Adapters: `src/db/adapters/postgres.ts` (postgres.js, `search_path`),
   `src/db/adapters/sqlite.ts` (`PRAGMA foreign_keys = ON`, `journal_mode = WAL`,
   busy timeout). A `makeDb(url)` that picks the adapter from the URL scheme.
   *done when:* an integration test connects to each (Postgres via a service
   container / local, SQLite via a temp file) and runs `select 1`.
-- [ ] **T2.5** `UnitOfWork`: `uow.run(fn)`, `tx.lockVehicle(id)`,
+- [x] **T2.5** `UnitOfWork`: `uow.run(fn)`, `tx.lockVehicle(id)`,
   `tx.lockSettings()`. Postgres uses `FOR UPDATE`; SQLite brackets
   `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` with a synchronous body.
   *done when:* a test proves rollback on throw, commit on return, and that a
   promise-returning SQLite callback throws early.
-- [ ] **T2.6** `src/db/schema/mappers.ts` + repo base: `rowToDomain` /
+- [x] **T2.6** `src/db/schema/mappers.ts` + repo base: `rowToDomain` /
   `domainToRow` per table; `Number.isSafeInteger` guard on the bigint fields.
   *done when:* round-trip test per table on both adapters.
-- [ ] **T2.7** Repositories for the slice-2 tables (`SettingsRepo`, `UserRepo`
+- [x] **T2.7** Repositories for the slice-2 tables (`SettingsRepo`, `UserRepo`
   subset, `UserTokenRepo`, `ApiTokenRepo`, `SessionRepo`) against the ports.
   *done when:* repository tests pass in the `[postgres, sqlite]` matrix.
-- [ ] **T2.8** Fixture loader in `test/support`: direct full-privilege
+- [x] **T2.8** Fixture loader in `test/support`: direct full-privilege
   connection, seeds either adapter; add `clean` (users only, no vehicles yet).
   *done when:* the loader seeds both adapters and a test reads the rows back.
 
 ## Slice 3 — Bootstrap
 
-- [ ] **T3.1** Privilege probe: Postgres `has_schema_privilege` /
+- [x] **T3.1** Privilege probe: Postgres `has_schema_privilege` /
   `has_table_privilege` per the `data-model.md` grant lists, each false mapped
   to the `GRANT` line; SQLite = file writable + `PRAGMA foreign_keys` settable.
   *done when:* a test with a deliberately under-granted Postgres role gets the
   exact missing-grant message (AC-2).
-- [ ] **T3.2** `bin/chotu.ts` `bootstrap`: run migrations for the active
+- [x] **T3.2** `bin/chotu.ts` `bootstrap`: run migrations for the active
   dialect, write `schema_meta`, validate against `SUPPORTED_SCHEMA_RANGE`.
   *done when:* a fresh temp DB is migrated and `schema_meta` is set; a
   tampered version stops startup (FR-1.3).
-- [ ] **T3.3** Seed `deployment_settings` (flags or defaults) and the first
+- [x] **T3.3** Seed `deployment_settings` (flags or defaults) and the first
   admin via all three credential paths (`--admin-email`+`--admin-password`;
   `user_token` `set_password` link; seeded `scott@chotu.local`/`tiger` with
   `must_change_password`). Issue one `api_token`, print once.
   *done when:* each path produces a usable admin row; the `scott` path sets the
   flag and prints the warning (AC-1).
-- [ ] **T3.4** Startup guards in `env.ts` / `index.ts`: refuse SQLite when
+- [x] **T3.4** Startup guards in `env.ts` / `index.ts`: refuse SQLite when
   `CHOTU_ENV=production` (FR-1.10); refuse to start in production while a seeded
   default-password admin exists (FR-1.6).
   *done when:* both refusals are covered by tests (AC-12) and print why.
-- [ ] **T3.5** `chotu token issue` / `token revoke`.
+- [x] **T3.5** `chotu token issue` / `token revoke`.
   *done when:* issue prints a `cht_` token once; revoke marks it; a CLI test
   covers both.
 
 ## Slice 4 — Cross-cutting middleware + auth core
 
-- [ ] **T4.1** Middleware: `request-id`, `logging` with the redaction list,
+- [x] **T4.1** Middleware: `request-id`, `logging` with the redaction list,
   `cors` (from `CORS_ALLOWED_ORIGINS`), `error` (the `{code,message,details}`
   body), mounted in `app.ts`.
   *done when:* tests assert the error body shape and that a redacted field never
   appears in a captured log line.
-- [ ] **T4.2** `domain/errors.ts` closed union + HTTP mapping table from
+- [x] **T4.2** `domain/errors.ts` closed union + HTTP mapping table from
   `plan.md` section 12.
   *done when:* a test enumerates every code and its status.
-- [ ] **T4.3** Password sign-in (`@node-rs/argon2`), `session` create (`chs_`),
+- [x] **T4.3** Password sign-in (`@node-rs/argon2`), `session` create (`chs_`),
   cookie + response-body credential (Q-11). Generic failure message.
   *done when:* a good sign-in returns a session; a wrong password returns the
   same generic `401`; rate-limit not yet required here.
-- [ ] **T4.4** Auth middleware: resolve `chs_` session vs `cht_` token by
+- [x] **T4.4** Auth middleware: resolve `chs_` session vs `cht_` token by
   prefix; load the `user`; reject `deactivated` (FR-2.5); set `ctx.user`. Update
   `api_token.last_used_at` off the main transaction (FR-5.2).
   *done when:* session, token, expired, revoked, and deactivated cases each
   return the right status.
-- [ ] **T4.5** `must-change-password` gate middleware (FR-4.5); sign-out
+- [x] **T4.5** `must-change-password` gate middleware (FR-4.5); sign-out
   (FR-2.4).
   *done when:* a `must_change_password` user gets `403 password_change_required`
   on everything except change-password; sign-out revokes.
-- [ ] **T4.6** API token routes: create (`cht_`, once), list, revoke (FR-5).
+- [x] **T4.6** API token routes: create (`cht_`, once), list, revoke (FR-5).
   Several active per user.
   *done when:* contract tests for the three routes pass on both adapters.
-- [ ] **T4.7** Rate-limit middleware (token bucket, per IP + per account,
+- [x] **T4.7** Rate-limit middleware (token bucket, per IP + per account,
   `TRUSTED_PROXY` handling, `429` + `Retry-After`) on sign-in and the reset and
   invite routes when they land.
   *done when:* a burst past the draft threshold returns `429` with the header.
-- [ ] **T4.8** OpenAPI pipeline: `contract/build.ts`, `pnpm openapi:write`
+- [x] **T4.8** OpenAPI pipeline: `contract/build.ts`, `pnpm openapi:write`
   writes `openapi.yaml`, `GET /openapi.yaml` and `GET /healthz` served
   unauthenticated (FR-19). CI OpenAPI gates go live; add the `BREAKING-OPENAPI:`
   trailer check to `oasdiff`.

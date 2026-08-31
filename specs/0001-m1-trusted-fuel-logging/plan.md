@@ -11,8 +11,15 @@ risks. No code. FR / AC / INV references point at `spec.md` and `data-model.md`.
 ## 0. Constitution deviations recorded here
 
 - The constitution tech table lists Playwright for end-to-end. M1 has no UI, so
-  end-to-end is a Vitest suite over a real socket instead. The plan commit body
-  records this.
+  end-to-end is a Vitest suite over a real socket instead.
+- Node 20 LTS -> **Node 22 LTS**. pnpm 11 needs Node >= 22.13; GitHub Actions is
+  deprecating Node 20 tooling. (T1.7.)
+- Runtime is **`tsx`** (esbuild under the hood), not `tsc` emit + `node dist/`.
+  The tsconfig is `module: "Preserve"` / `moduleResolution: "Bundler"` with
+  extensionless relative imports, so `tsc` typecheck, Vitest, drizzle-kit, and
+  ESLint all resolve the same way. `tsc` is typecheck-only (`noEmit`). A
+  production bundle step (esbuild/tsup or a container) is folded into research
+  item R-1. (T2.1.)
 
 ## 1. Approach
 

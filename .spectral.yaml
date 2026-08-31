@@ -1,0 +1,8 @@
+extends: ["spectral:oas"]
+rules:
+  # API-only deployment: no servers block, no contact/tags requirement.
+  oas3-api-servers: off
+  info-contact: off
+  operation-tag-defined: off
+  operation-tags: off
+  oas3-unused-component: off

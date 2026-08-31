@@ -1,0 +1,9 @@
+packages:
+  - "packages/*"
+
+# Dependencies whose install scripts pnpm is allowed to run. pnpm blocks all
+# postinstall scripts by default; vet and list each one here.
+allowBuilds:
+  esbuild: true
+  better-sqlite3: true
+  "@node-rs/argon2": true
