@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T5b.2 (slice 5b complete)
-- **Next task:** T5c.1
+- **Last completed task:** T5c.5 (slice 5c complete; T5c.1-5 built together, one commit)
+- **Next task:** T6a.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -191,22 +191,22 @@ pause with almost no rework.
 
 ## Slice 5c — Admin mutations + INV-6
 
-- [ ] **T5c.1** Create user directly (FR-8.3); deactivate / reactivate
+- [x] **T5c.1** Create user directly (FR-8.3); deactivate / reactivate
   (FR-8.4) with immediate session+token cut-off.
   *done when:* a deactivated user's existing session returns `401` next request.
-- [ ] **T5c.2** Trigger reset for a user (FR-8.5 / FR-4.4) — issues a
+- [x] **T5c.2** Trigger reset for a user (FR-8.5 / FR-4.4) — issues a
   `user_token` `reset`; audited.
   *done when:* audit-delta test passes; the link is returned or sent per config.
-- [ ] **T5c.3** Grant / revoke admin (FR-8.7); delete user + data (FR-8.6) with
+- [x] **T5c.3** Grant / revoke admin (FR-8.7); delete user + data (FR-8.6) with
   explicit confirm.
   *done when:* contract tests pass; delete cascades like self-delete.
-- [ ] **T5c.4** INV-6 last-admin lock: all of demote, deactivate, delete run in
+- [x] **T5c.4** INV-6 last-admin lock: all of demote, deactivate, delete run in
   `uow.run` after `tx.lockSettings`; refuse with `last_admin`. Add the
   `last-admin` fixture and a `Promise.all` contention test (Postgres race;
   SQLite serialisation).
   *done when:* the fixture proves all three are blocked; the race test never
   reaches zero admins (AC-8).
-- [ ] **T5c.5** Audit assertions across every 5c action (AC-9).
+- [x] **T5c.5** Audit assertions across every 5c action (AC-9).
   *done when:* one audit-delta assertion per action, all green.
 
 ## Slice 6a — Invitations

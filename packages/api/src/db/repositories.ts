@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return -- one repo layer over both Drizzle dialects; ports.ts is the typed boundary */
 import { and, desc, eq, isNull, lte, sql } from "drizzle-orm";
 
+import { err } from "../domain/errors";
 import { newId } from "../domain/id";
 
 import { mappers } from "./schema/mappers";
@@ -378,4 +379,122 @@ export function writeAuditInTx(
     .values(mappers.auditLog.toRow(row, "sqlite") as any)
     .run();
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Transaction helpers for the admin mutation routes (slice 5c).
+//
+// Each returns `void` synchronously on SQLite and a `Promise<void>` on
+// PostgreSQL. Pass them as steps to `runTxSteps` (uow.ts), which hides the
+// dialect split. A step may throw to roll the whole uow back.
+// ---------------------------------------------------------------------------
+
+/** The schema module for a transaction's dialect, loosely typed like `makeRepos`. */
+function txParts(tx: Tx): { db: any; s: typeof sqliteSchema; a: Adapter } {
+  const s: typeof sqliteSchema =
+    tx.dialect === "postgres"
+      ? (pgSchema as unknown as typeof sqliteSchema)
+      : sqliteSchema;
+  return { db: tx.db as any, s, a: tx.dialect };
+}
+
+/** Await on Postgres, no-op on SQLite (the builder already ran). */
+function settle(tx: Tx, builder: any): void | Promise<void> {
+  if (tx.dialect === "postgres") return builder.then(() => undefined);
+  builder.run();
+}
+
+/** Insert a fully-formed user row. */
+export function insertUserInTx(tx: Tx, row: UserRow): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  return settle(tx, db.insert(s.user).values(mappers.user.toRow(row, a)));
+}
+
+/** Patch a user row by id. `updatedAt` is set here. */
+export function updateUserInTx(
+  tx: Tx,
+  id: string,
+  patch: Partial<UserRow>,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.user.toRow({ ...patch, updatedAt: new Date() }, a);
+  return settle(tx, db.update(s.user).set(values).where(eq(s.user.id, id)));
+}
+
+/** Revoke every live session for a user. */
+export function revokeUserSessionsInTx(
+  tx: Tx,
+  userId: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const value = a === "sqlite" ? at.toISOString() : at;
+  return settle(
+    tx,
+    db
+      .update(s.session)
+      .set({ revokedAt: value })
+      .where(and(eq(s.session.userId, userId), isNull(s.session.revokedAt))),
+  );
+}
+
+/** Revoke every live API token for a user. */
+export function revokeUserApiTokensInTx(
+  tx: Tx,
+  userId: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const value = a === "sqlite" ? at.toISOString() : at;
+  return settle(
+    tx,
+    db
+      .update(s.apiToken)
+      .set({ revokedAt: value })
+      .where(and(eq(s.apiToken.userId, userId), isNull(s.apiToken.revokedAt))),
+  );
+}
+
+/**
+ * Issue a `user_token`, first clearing any unused token of the same purpose
+ * for that user (mirrors `repos.userTokens.issue`).
+ */
+export function issueUserTokenInTx(
+  tx: Tx,
+  row: UserTokenRow,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const clearWhere = and(
+    eq(s.userToken.userId, row.userId),
+    eq(s.userToken.purpose, row.purpose),
+    isNull(s.userToken.usedAt),
+  );
+  if (tx.dialect === "postgres") {
+    return db
+      .delete(s.userToken)
+      .where(clearWhere)
+      .then(() =>
+        db.insert(s.userToken).values(mappers.userToken.toRow(row, a)),
+      )
+      .then(() => undefined);
+  }
+  db.delete(s.userToken).where(clearWhere).run();
+  db.insert(s.userToken).values(mappers.userToken.toRow(row, a)).run();
+}
+
+/**
+ * INV-6 / FR-7.4 guard. Throw `last_admin` when the mutation would remove the
+ * deployment's last active admin. Call it as the first `runTxSteps` step, with
+ * `{ settings: true }` so the count is serialised.
+ */
+export function guardLastAdminInTx(tx: Tx, target: UserRow): unknown {
+  if (target.role !== "admin" || target.status !== "active") return undefined;
+  const n = countActiveAdminsInTx(tx);
+  if (typeof n === "number") {
+    if (n <= 1) throw err.lastAdmin();
+    return undefined;
+  }
+  return n.then((count) => {
+    if (count <= 1) throw err.lastAdmin();
+  });
 }

@@ -21,7 +21,7 @@ interface AuditExpectation {
 export async function expectAuditDelta<T>(
   handle: DbHandle,
   expected: AuditExpectation,
-  fn: () => Promise<T>,
+  fn: () => T | Promise<T>,
 ): Promise<T> {
   const repos = makeRepos(handle);
   const before = await repos.audit.count();

@@ -2,6 +2,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 
 import { CURRENT_SCHEMA_VERSION } from "../db/schema/version";
 import { ERROR_STATUS } from "../domain/errors";
+import { AdminCreateUserBody, AdminDeleteUserBody } from "../routes/admin";
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
 import { ProfileUpdateBody } from "../routes/profile";
 import { TokenCreateBody } from "../routes/tokens";
@@ -53,6 +54,36 @@ function errorResponse(description: string): Json {
 }
 
 const emptyResponse = (description: string): Json => ({ description });
+
+const idParam: Json = {
+  name: "id",
+  in: "path",
+  required: true,
+  schema: { type: "string" },
+};
+
+/** A `POST /admin/users/{id}/<verb>` action that returns 204 and no body. */
+function adminAction(
+  operationId: string,
+  summary: string,
+  description: string,
+): Json {
+  return {
+    post: {
+      operationId,
+      summary,
+      description,
+      parameters: [idParam],
+      responses: {
+        "204": emptyResponse("Done (idempotent)"),
+        "401": errorResponse("Not authenticated"),
+        "403": errorResponse("Admin role required"),
+        "404": errorResponse("No such user"),
+        "422": errorResponse("This is the last active admin"),
+      },
+    },
+  };
+}
 
 export function buildOpenApiDocument(): Json {
   return {
@@ -294,6 +325,32 @@ export function buildOpenApiDocument(): Json {
             "403": errorResponse("Admin role required"),
           },
         },
+        post: {
+          operationId: "adminCreateUser",
+          summary: "Create an account directly",
+          description:
+            "Admin only (FR-8.3). Omit `password` to get a one-time " +
+            "set-password link in the response instead.",
+          requestBody: jsonBody(bodySchema(AdminCreateUserBody)),
+          responses: {
+            "201": jsonResponse("The new account", {
+              type: "object",
+              required: ["user"],
+              properties: {
+                user: { $ref: "#/components/schemas/AdminUserListItem" },
+                setPasswordToken: {
+                  type: "string",
+                  description: "Present when no password was supplied",
+                },
+                note: { type: "string" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "409": errorResponse("Email already registered"),
+          },
+        },
       },
       "/admin/users/{id}": {
         get: {
@@ -302,15 +359,79 @@ export function buildOpenApiDocument(): Json {
           description:
             "Admin only. Adds last sign-in, linked identities, and the active " +
             "API-token count. No fuel entry data is ever included (INV-9).",
-          parameters: [
-            { name: "id", in: "path", required: true, schema: { type: "string" } },
-          ],
+          parameters: [idParam],
           responses: {
             "200": jsonResponse("The account", {
               type: "object",
               required: ["user"],
               properties: {
                 user: { $ref: "#/components/schemas/AdminUserDetail" },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "404": errorResponse("No such user"),
+          },
+        },
+        delete: {
+          operationId: "adminDeleteUser",
+          summary: "Delete an account and all its data",
+          description:
+            "Admin only (FR-8.6). `confirmEmail` must equal the target's " +
+            "email. Cascades vehicles, entries, tokens, sessions, identities. " +
+            "Refused for the last active admin (INV-6).",
+          parameters: [idParam],
+          requestBody: jsonBody(bodySchema(AdminDeleteUserBody)),
+          responses: {
+            "204": emptyResponse("Deleted"),
+            "400": errorResponse("Missing or mismatched confirmEmail"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "404": errorResponse("No such user"),
+            "422": errorResponse("This is the last active admin"),
+          },
+        },
+      },
+      "/admin/users/{id}/deactivate": adminAction(
+        "adminDeactivateUser",
+        "Deactivate an account",
+        "Admin only (FR-8.4). Cuts the user's sessions and API tokens " +
+          "immediately. Refused for the last active admin (INV-6).",
+      ),
+      "/admin/users/{id}/reactivate": adminAction(
+        "adminReactivateUser",
+        "Reactivate an account",
+        "Admin only (FR-8.4).",
+      ),
+      "/admin/users/{id}/grant-admin": adminAction(
+        "adminGrantAdmin",
+        "Grant the admin role",
+        "Admin only (FR-8.7).",
+      ),
+      "/admin/users/{id}/revoke-admin": adminAction(
+        "adminRevokeAdmin",
+        "Revoke the admin role",
+        "Admin only (FR-8.7). Refused for the last active admin (INV-6).",
+      ),
+      "/admin/users/{id}/reset": {
+        post: {
+          operationId: "adminTriggerReset",
+          summary: "Trigger a password reset for an account",
+          description:
+            "Admin only (FR-8.5). Issues a reset link. The link is returned in " +
+            "the response when email is not configured (R-2 interim).",
+          parameters: [idParam],
+          responses: {
+            "200": jsonResponse("Reset issued", {
+              type: "object",
+              required: ["sent"],
+              properties: {
+                sent: { type: "boolean" },
+                resetToken: {
+                  type: "string",
+                  description: "Present when email is not configured",
+                },
+                note: { type: "string" },
               },
             }),
             "401": errorResponse("Not authenticated"),
