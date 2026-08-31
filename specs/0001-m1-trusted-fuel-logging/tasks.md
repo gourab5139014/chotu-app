@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T4.2
-- **Next task:** T4.1
+- **Last completed task:** T4.1
+- **Next task:** T4.3
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -125,7 +125,7 @@ pause with almost no rework.
 
 ## Slice 4 — Cross-cutting middleware + auth core
 
-- [ ] **T4.1** Middleware: `request-id`, `logging` with the redaction list,
+- [x] **T4.1** Middleware: `request-id`, `logging` with the redaction list,
   `cors` (from `CORS_ALLOWED_ORIGINS`), `error` (the `{code,message,details}`
   body), mounted in `app.ts`.
   *done when:* tests assert the error body shape and that a redacted field never

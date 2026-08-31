@@ -43,6 +43,7 @@ export default tseslint.config(
     files: [
       "packages/api/src/index.ts",
       "packages/api/src/cli.ts",
+      "packages/api/src/log.ts",
       "packages/api/src/bin/**/*.ts",
     ],
     rules: { "no-console": "off" },

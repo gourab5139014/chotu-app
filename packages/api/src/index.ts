@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { buildApp } from "./app";
 import { assertSchemaSupported } from "./db/bootstrap";
 import { makeDb } from "./db/index";
+import { makeRepos } from "./db/repositories";
 import { parseEnv } from "./env";
 import { assertStartupSafe } from "./startup";
 
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
   await assertSchemaSupported(handle);
   await assertStartupSafe(env, handle);
 
-  const app = buildApp();
+  const app = buildApp({ env, handle, repos: makeRepos(handle) });
   serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`chotu api listening on :${info.port} (${env.CHOTU_ENV})`);
   });
