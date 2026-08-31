@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T4.3
-- **Next task:** T4.4
+- **Last completed task:** T4.4
+- **Next task:** T4.5
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -137,7 +137,7 @@ pause with almost no rework.
   cookie + response-body credential (Q-11). Generic failure message.
   *done when:* a good sign-in returns a session; a wrong password returns the
   same generic `401`; rate-limit not yet required here.
-- [ ] **T4.4** Auth middleware: resolve `chs_` session vs `cht_` token by
+- [x] **T4.4** Auth middleware: resolve `chs_` session vs `cht_` token by
   prefix; load the `user`; reject `deactivated` (FR-2.5); set `ctx.user`. Update
   `api_token.last_used_at` off the main transaction (FR-5.2).
   *done when:* session, token, expired, revoked, and deactivated cases each

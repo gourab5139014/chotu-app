@@ -1,5 +1,6 @@
 import { makeRepos } from "../db/repositories";
 import type { DbHandle } from "../db/index";
+import type { UserRow } from "../db/schema/types";
 import { newId } from "../domain/id";
 
 import { API_TOKEN_PREFIX, generateCredential, hashToken } from "./tokens";
@@ -29,6 +30,22 @@ export async function issueApiToken(
     expiresAt: null,
   });
   return { token };
+}
+
+/** Resolve an API token to a live user, or null. Also returns the token id. */
+export async function resolveApiToken(
+  handle: DbHandle,
+  token: string,
+): Promise<{ user: UserRow; tokenId: string } | null> {
+  const repos = makeRepos(handle);
+  const row = await repos.apiTokens.findByHash(hashToken(token));
+  if (row == null || row.revokedAt != null) return null;
+  if (row.expiresAt != null && row.expiresAt.getTime() <= Date.now()) {
+    return null;
+  }
+  const user = await repos.users.findById(row.userId);
+  if (user == null || user.status !== "active") return null;
+  return { user, tokenId: row.id };
 }
 
 /** Revoke an API token by its plaintext value. */

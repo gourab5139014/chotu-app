@@ -4,8 +4,10 @@ import { z } from "zod";
 
 import { signIn } from "../auth/signin";
 import { SESSION_COOKIE } from "../auth/tokens";
+import { err } from "../domain/errors";
 import type { AppDeps, AppHono } from "../http/context";
 import { parseJson } from "../http/validate";
+import { authMiddleware } from "../middleware/auth";
 import type { UserRow } from "../db/schema/types";
 
 const SignInBody = z.object({
@@ -56,6 +58,13 @@ export function authRoutes(deps: AppDeps): Hono<AppHono> {
       session: result.sessionToken,
       expiresAt: result.expiresAt.toISOString(),
     });
+  });
+
+  // GET /auth/me — the signed-in user (FR-7.1 read; protected)
+  r.get("/me", authMiddleware(deps), (c) => {
+    const user = c.get("user");
+    if (user == null) throw err.unauthorized();
+    return c.json({ user: publicUser(user) });
   });
 
   return r;
