@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
@@ -16,32 +15,36 @@ export interface MigratedPostgres {
   cleanup(): Promise<void>;
 }
 
+function swapDatabase(url: string, dbName: string): string {
+  return url.replace(/\/[^/?]+(\?[^#]*)?$/, `/${dbName}$1`);
+}
+
 /**
- * A migrated PostgreSQL database in a per-call throwaway schema, so parallel
- * test files do not collide on the shared CI database. The handle uses a single
- * connection (`max: 1`) plus a `search_path` startup parameter, so every query
- * lands in that schema. `DATABASE_URL` must point at the CI postgres server.
+ * A migrated PostgreSQL database in a per-call throwaway *database*, so parallel
+ * test files never collide. Tables live in that database's `public` schema; no
+ * `search_path` juggling. `DATABASE_URL` must point at the CI postgres server.
+ * The runtime adapter's `search_path=chotu` behaviour (FR-1.9) is covered by
+ * `adapters.test.ts`.
  */
 export async function openMigratedPostgres(
   url: string,
 ): Promise<MigratedPostgres> {
-  const schemaName = `chotu_test_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  const dbName = `chotu_test_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
   const admin = postgres(url, { max: 1, onnotice: () => undefined });
-  await admin.unsafe(`create schema "${schemaName}"`);
+  await admin.unsafe(`create database "${dbName}"`);
   await admin.end();
 
-  const handle = makePostgres(url, { schemaName, max: 1 });
-  await handle.db.execute(sql.raw(`set search_path to "${schemaName}"`));
+  const handle = makePostgres(swapDatabase(url, dbName), { schemaName: "public" });
   await migrate(handle.db, { migrationsFolder });
 
   return {
     handle,
     cleanup: async () => {
-      await handle.db.execute(
-        sql.raw(`drop schema if exists "${schemaName}" cascade`),
-      );
       await handle.close();
+      const admin2 = postgres(url, { max: 1, onnotice: () => undefined });
+      await admin2.unsafe(`drop database if exists "${dbName}" with (force)`);
+      await admin2.end();
     },
   };
 }
