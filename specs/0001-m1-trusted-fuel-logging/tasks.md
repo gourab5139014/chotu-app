@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T2.8 (slice 2 complete)
-- **Next task:** T3.1
+- **Last completed task:** T3.1
+- **Next task:** T3.2
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -100,7 +100,7 @@ pause with almost no rework.
 
 ## Slice 3 — Bootstrap
 
-- [ ] **T3.1** Privilege probe: Postgres `has_schema_privilege` /
+- [x] **T3.1** Privilege probe: Postgres `has_schema_privilege` /
   `has_table_privilege` per the `data-model.md` grant lists, each false mapped
   to the `GRANT` line; SQLite = file writable + `PRAGMA foreign_keys` settable.
   *done when:* a test with a deliberately under-granted Postgres role gets the
