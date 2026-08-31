@@ -272,7 +272,7 @@ These rewrites landed in the same change as this file.
   removed. Auth decisions cover OIDC Authorization Code, per-user API tokens,
   and server-side sessions. Principle 4 is per-user isolation.
 - **`data-model.md`.** `profile` is now `user`. Added `identity`, `invitation`,
-  `session`, `password_reset`, `deployment_settings`, `oidc_provider`, and
+  `session`, `user_token`, `oidc_login`, `deployment_settings`, `oidc_provider`, and
   `audit_log`. `api_token` and `vehicle` carry `user_id`. `user` has a `role`.
   Ownership chain is fuel_entry to vehicle to user. INV-6 to INV-9 added.
 - **`spec.md`.** FR-2 to FR-10 now cover sign-in and sessions, invitations,
