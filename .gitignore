@@ -31,3 +31,8 @@ pnpm-debug.log*
 
 # Test / coverage
 coverage/
+
+# Local SQLite
+*.db
+*.db-shm
+*.db-wal

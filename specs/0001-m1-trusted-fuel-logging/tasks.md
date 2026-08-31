@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T2.3
-- **Next task:** T2.4
+- **Last completed task:** T2.4
+- **Next task:** T2.5
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -78,7 +78,7 @@ pause with almost no rework.
 - [x] **T2.3** `src/db/schema/types.ts`: canonical row/insert types for those
   tables. `src/db/schema/version.ts` with `SUPPORTED_SCHEMA_RANGE`.
   *done when:* `tsc --noEmit` passes; a type-level test pins the row shape.
-- [ ] **T2.4** Adapters: `src/db/adapters/postgres.ts` (postgres.js, `search_path`),
+- [x] **T2.4** Adapters: `src/db/adapters/postgres.ts` (postgres.js, `search_path`),
   `src/db/adapters/sqlite.ts` (`PRAGMA foreign_keys = ON`, `journal_mode = WAL`,
   busy timeout). A `makeDb(url)` that picks the adapter from the URL scheme.
   *done when:* an integration test connects to each (Postgres via a service

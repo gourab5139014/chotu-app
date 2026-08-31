@@ -5,3 +5,4 @@ packages:
 # postinstall scripts by default; vet and list each one here.
 allowBuilds:
   esbuild: true
+  better-sqlite3: true
