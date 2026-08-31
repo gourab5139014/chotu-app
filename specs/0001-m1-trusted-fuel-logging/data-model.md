@@ -206,16 +206,45 @@ Server-side state for a signed-in browser client.
 | `user_agent` | text | yes | |
 | `ip` | text | yes | |
 
-### password_reset
+### user_token
+
+One store for every single-use, short-lived link token tied to a user:
+password reset (FR-4), email verification (FR-3.5), and the bootstrap
+set-password link (FR-1.5).
 
 | Field | Type | Null | Notes |
 |---|---|---|---|
 | `id` | uuid | no | primary key |
 | `user_id` | uuid | no | foreign key to `user.id`, on delete cascade |
-| `token_hash` | text | no | SHA-256 of the reset token, unique |
+| `purpose` | text | no | `reset`, `verify`, or `set_password` |
+| `token_hash` | text | no | SHA-256 of the token, unique |
 | `expires_at` | timestamptz | no | short-lived |
-| `used_at` | timestamptz | yes | |
+| `used_at` | timestamptz | yes | null means unused |
 | `created_at` | timestamptz | no | |
+
+Constraints: `purpose in ('reset','verify','set_password')`. At most one
+unused, unexpired row per `(user_id, purpose)`.
+
+### oidc_login
+
+Short-lived per-attempt state for the OIDC Authorization Code flow, held between
+`/auth/oidc/:key/start` and `/callback` so the process can stay stateless and
+multi-instance. FR-6.2.
+
+| Field | Type | Null | Notes |
+|---|---|---|---|
+| `id` | uuid | no | primary key |
+| `provider_key` | text | no | foreign key to `oidc_provider.key` |
+| `state_hash` | text | no | SHA-256 of the `state` value, unique |
+| `code_verifier` | text | no | PKCE verifier for this attempt |
+| `nonce` | text | yes | OIDC nonce for this attempt |
+| `redirect_to` | text | yes | where to send the client after sign-in |
+| `expires_at` | timestamptz | no | a few minutes |
+| `consumed_at` | timestamptz | yes | set at callback |
+| `created_at` | timestamptz | no | |
+
+A signed, `HttpOnly`, short-TTL cookie carrying the same fields is an acceptable
+alternative when the deployment prefers no table write on the start step.
 
 ### api_token
 
@@ -370,12 +399,18 @@ ordering, the user time zone, or a count. The database still enforces the
 per-row checks and every foreign key.
 
 **Concurrency.** INV-2 and INV-6 must not be raced. The write that checks INV-2
-first takes a row lock on the `vehicle` (`SELECT ... FOR UPDATE`), so two
-concurrent fuel-entry writes on one vehicle serialise. The write that checks
-INV-6 first takes a lock on the `deployment_settings` singleton row, so two
-concurrent demotions or deactivations serialise. Both checks and their writes
-run in one transaction. Where the engine supports it, a deferred constraint or
-trigger is added as a backstop.
+first takes a row lock on the `vehicle`, so two concurrent fuel-entry writes on
+one vehicle serialise. On PostgreSQL that is `SELECT ... FOR UPDATE` on the
+vehicle row. On SQLite it is a `BEGIN IMMEDIATE` write transaction, which takes
+the database write lock for the whole check-and-write. The write that checks
+INV-6 first locks the `deployment_settings` singleton row the same way, so two
+concurrent demotions or deactivations serialise. Both checks and their writes,
+and the `audit_log` insert that records them, run in one transaction.
+
+M1 enforces INV-2 and INV-6 with application locks only. It adds **no** database
+trigger or deferred constraint, because a trigger would not port cleanly across
+PostgreSQL and SQLite and the lock already closes the race. This is a deliberate
+deviation from the earlier "trigger as a backstop" note.
 
 ## Derived values, not stored
 
@@ -392,6 +427,8 @@ Computed on read. Listed so nobody adds a column for them.
 |---|---|---|
 | UUID | `uuid` | `text` |
 | Big integer | `bigint` | `integer` (64-bit) |
+| Foreign keys | on by default | `PRAGMA foreign_keys = ON` on every connection |
+| Write serialisation | row `FOR UPDATE` | `BEGIN IMMEDIATE` transaction |
 | Boolean | `boolean` | `integer` 0 or 1, mapped by Drizzle |
 | Timestamp | `timestamptz` | `text` ISO-8601 UTC |
 | JSON | `jsonb` | `text` with JSON validation in the app |
@@ -409,26 +446,50 @@ deployment target. (Resolved, open question Q-9.)
 
 ## Minimum database privileges
 
-Documented for FR-1.5. Values to finalize during the plan.
+Documented for FR-1.5 and FR-1.8. Finalised.
 
-- **Bootstrap role.** Create schema, create table, create index, alter table,
-  insert into `schema_meta` and the migration journal. Scoped to the Chotu
-  schema only.
-- **API role.** Select, insert, update, delete on the Chotu tables. Insert only
-  on `audit_log`. No DDL. No access to other schemas.
+### PostgreSQL
+
+Chotu owns one schema, default name `chotu`. Two roles.
+
+- **Bootstrap role.** `CONNECT` on the database; `CREATE` on the database (to
+  create the schema on a first run) or `CREATE` on the existing `chotu` schema;
+  `USAGE, CREATE` on the `chotu` schema; ability to `CREATE TABLE`, `CREATE
+  INDEX`, `ALTER TABLE`, `CREATE TYPE`, and `INSERT/UPDATE` on `schema_meta` and
+  the Drizzle migration journal table. No privilege on any schema other than
+  `chotu` and `public` for the extension check.
+- **API role.** `CONNECT`; `USAGE` on the `chotu` schema; `SELECT, INSERT,
+  UPDATE, DELETE` on every Chotu table **except** `audit_log`, where it has
+  `INSERT, SELECT` only. No `CREATE`, `ALTER`, `DROP`, `TRUNCATE`. No access to
+  another schema.
+
+The bootstrap probe checks these with `has_schema_privilege()` and
+`has_table_privilege()` and, on a false result, prints the exact `GRANT`
+statement to run (FR-1.4, AC-2). It does not rely on a trial `CREATE`.
+
+### SQLite
+
+One file. The bootstrap and API "roles" are the same OS process. The probe
+reduces to: the directory exists and the file is writable, and
+`PRAGMA foreign_keys` can be set. A read-only file fails bootstrap with an
+actionable message.
 
 ## Fixtures
 
 For the reconciliation and isolation requirements and AC-3, AC-6. Committed
-under `packages/api/test/fixtures`.
+under `packages/api/test/fixtures`. A fixture loader seeds either adapter using a
+test-only direct connection with full privileges, not the API role, so it can
+insert rows the API cannot (see `orphaned`).
 
 - `clean` — one admin, two regular users, each with vehicles and ordered fuel
   entries. Reconciliation returns no findings.
 - `isolation` — two users with vehicles. Used to prove a request as user A never
   returns user B's vehicles or entries, and that the admin role does not either.
 - `duplicate` — two entries with the same vehicle, date, odometer, volume, cost.
-- `orphaned` — an entry whose vehicle id is absent. Only loadable by bypassing
-  the foreign key, to test the reconciliation report path.
+- `orphaned` — an entry whose vehicle id is absent. The loader inserts it with
+  the direct connection: on PostgreSQL by deferring or dropping the FK check for
+  the insert, on SQLite by loading it with `PRAGMA foreign_keys = OFF` in that
+  session. Tests the reconciliation report path.
 - `odometer-decrease` — a sequence with one adjacent decreasing pair. Also used
   for the mid-sequence insert check: an entry back-dated between two existing
   entries so it must be validated against both neighbours.
