@@ -1,18 +1,27 @@
 import { serve } from "@hono/node-server";
 
 import { buildApp } from "./app";
+import { assertSchemaSupported } from "./db/bootstrap";
+import { makeDb } from "./db/index";
+import { parseEnv } from "./env";
+import { assertStartupSafe } from "./startup";
 
-/**
- * Process entry point. Startup guards (production vs SQLite, seeded-admin
- * password check) are added in slice 3 — see plan.md section 7.
- */
-function main(): void {
+async function main(): Promise<void> {
+  const env = parseEnv();
+  const handle = makeDb(env.DATABASE_URL);
+
+  // FR-1.3, FR-1.6, FR-1.10 — refuse to serve on an unsupported schema, on
+  // SQLite in production, or while a seeded default admin is unchanged.
+  await assertSchemaSupported(handle);
+  await assertStartupSafe(env, handle);
+
   const app = buildApp();
-  const port = Number.parseInt(process.env["PORT"] ?? "8787", 10);
-
-  serve({ fetch: app.fetch, port }, (info) => {
-    console.log(`chotu api listening on :${info.port}`);
+  serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+    console.log(`chotu api listening on :${info.port} (${env.CHOTU_ENV})`);
   });
 }
 
-main();
+main().catch((err: unknown) => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exitCode = 1;
+});

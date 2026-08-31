@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T3.3
-- **Next task:** T3.4
+- **Last completed task:** T3.4
+- **Next task:** T3.5
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -115,7 +115,7 @@ pause with almost no rework.
   `must_change_password`). Issue one `api_token`, print once.
   *done when:* each path produces a usable admin row; the `scott` path sets the
   flag and prints the warning (AC-1).
-- [ ] **T3.4** Startup guards in `env.ts` / `index.ts`: refuse SQLite when
+- [x] **T3.4** Startup guards in `env.ts` / `index.ts`: refuse SQLite when
   `CHOTU_ENV=production` (FR-1.10); refuse to start in production while a seeded
   default-password admin exists (FR-1.6).
   *done when:* both refusals are covered by tests (AC-12) and print why.
