@@ -8,6 +8,13 @@
       "when": 1788157541548,
       "tag": "0000_common_spitfire",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788157669402,
+      "tag": "0001_curious_harrier",
+      "breakpoints": true
     }
   ]
 }

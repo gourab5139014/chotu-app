@@ -21,6 +21,10 @@ function shape(table: Table): Record<string, ColShape> {
 const pairs: ReadonlyArray<readonly [string, Table, Table]> = [
   ["schema_meta", pg.schemaMeta, sqlite.schemaMeta],
   ["deployment_settings", pg.deploymentSettings, sqlite.deploymentSettings],
+  ["user", pg.user, sqlite.user],
+  ["user_token", pg.userToken, sqlite.userToken],
+  ["api_token", pg.apiToken, sqlite.apiToken],
+  ["session", pg.session, sqlite.session],
 ];
 
 describe("schema parity: pg vs sqlite", () => {

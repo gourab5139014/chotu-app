@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T2.1
-- **Next task:** T2.2
+- **Last completed task:** T2.2
+- **Next task:** T2.3
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -68,7 +68,7 @@ pause with almost no rework.
   `{ pg, sqlite }` column builder pair (uuid/text, timestamptz/ISO text,
   jsonb/text, `text[]`/JSON text, boolean, date, bigint→number).
   *done when:* unit test builds one table both ways and asserts column parity.
-- [ ] **T2.2** Tables in `pg.ts` and `sqlite.ts` from `fields.ts`:
+- [x] **T2.2** Tables in `pg.ts` and `sqlite.ts` from `fields.ts`:
   `deployment_settings`, `schema_meta` (both with the singleton guard),
   `user`, `user_token`, `api_token`, `session`. Constraints and indexes per
   `data-model.md`, incl. the `user_token` partial unique and the `user`
