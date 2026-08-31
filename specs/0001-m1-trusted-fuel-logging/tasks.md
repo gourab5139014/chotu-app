@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T5a.4 (slice 5a complete)
-- **Next task:** T5b.1
+- **Last completed task:** T5b.1
+- **Next task:** T5b.2
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -180,7 +180,7 @@ pause with almost no rework.
 
 ## Slice 5b — Admin read
 
-- [ ] **T5b.1** `admin` gate middleware (role check, not just a valid
+- [x] **T5b.1** `admin` gate middleware (role check, not just a valid
   credential).
   *done when:* a non-admin credential gets `403` on an admin route.
 - [ ] **T5b.2** `GET /admin/users` list (email, role, status, created, vehicle
