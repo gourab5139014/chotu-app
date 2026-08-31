@@ -16,11 +16,10 @@ export interface MigratedSqlite {
   cleanup(): Promise<void>;
 }
 
-/** A fresh temp SQLite database with every migration applied. */
-export function openMigratedSqlite(): MigratedSqlite {
+/** A fresh temp SQLite database, no migrations applied. */
+export function openRawSqlite(): MigratedSqlite {
   const dir = mkdtempSync(join(tmpdir(), "chotu-test-"));
   const handle = makeSqlite(`file:${join(dir, "t.db")}`);
-  migrate(handle.db, { migrationsFolder });
   return {
     handle,
     cleanup: async () => {
@@ -28,4 +27,11 @@ export function openMigratedSqlite(): MigratedSqlite {
       rmSync(dir, { recursive: true, force: true });
     },
   };
+}
+
+/** A fresh temp SQLite database with every migration applied. */
+export function openMigratedSqlite(): MigratedSqlite {
+  const raw = openRawSqlite();
+  migrate(raw.handle.db, { migrationsFolder });
+  return raw;
 }

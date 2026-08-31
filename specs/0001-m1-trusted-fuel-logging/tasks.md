@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T3.1
-- **Next task:** T3.2
+- **Last completed task:** T3.2
+- **Next task:** T3.3
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -105,7 +105,7 @@ pause with almost no rework.
   to the `GRANT` line; SQLite = file writable + `PRAGMA foreign_keys` settable.
   *done when:* a test with a deliberately under-granted Postgres role gets the
   exact missing-grant message (AC-2).
-- [ ] **T3.2** `bin/chotu.ts` `bootstrap`: run migrations for the active
+- [x] **T3.2** `bin/chotu.ts` `bootstrap`: run migrations for the active
   dialect, write `schema_meta`, validate against `SUPPORTED_SCHEMA_RANGE`.
   *done when:* a fresh temp DB is migrated and `schema_meta` is set; a
   tampered version stops startup (FR-1.3).

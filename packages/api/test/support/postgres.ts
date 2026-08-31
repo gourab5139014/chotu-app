@@ -26,17 +26,16 @@ function swapDatabase(url: string, dbName: string): string {
  * The runtime adapter's `search_path=chotu` behaviour (FR-1.9) is covered by
  * `adapters.test.ts`.
  */
-export async function openMigratedPostgres(
-  url: string,
-): Promise<MigratedPostgres> {
+export async function openRawPostgres(url: string): Promise<MigratedPostgres> {
   const dbName = `chotu_test_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
   const admin = postgres(url, { max: 1, onnotice: () => undefined });
   await admin.unsafe(`create database "${dbName}"`);
   await admin.end();
 
-  const handle = makePostgres(swapDatabase(url, dbName), { schemaName: "public" });
-  await migrate(handle.db, { migrationsFolder });
+  const handle = makePostgres(swapDatabase(url, dbName), {
+    schemaName: "public",
+  });
 
   return {
     handle,
@@ -47,4 +46,12 @@ export async function openMigratedPostgres(
       await admin2.end();
     },
   };
+}
+
+export async function openMigratedPostgres(
+  url: string,
+): Promise<MigratedPostgres> {
+  const raw = await openRawPostgres(url);
+  await migrate(raw.handle.db, { migrationsFolder });
+  return raw;
 }

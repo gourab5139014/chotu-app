@@ -1,3 +1,5 @@
+import type { SQL } from "drizzle-orm";
+
 import { makePostgres, type PostgresHandle } from "./adapters/postgres";
 import { makeSqlite, type SqliteHandle } from "./adapters/sqlite";
 
@@ -23,4 +25,24 @@ export function adapterFor(url: string): Adapter {
 
 export function makeDb(url: string): DbHandle {
   return adapterFor(url) === "postgres" ? makePostgres(url) : makeSqlite(url);
+}
+
+/** Run a raw SQL query on either dialect and return the rows. */
+export async function sqlQuery<T = Record<string, unknown>>(
+  handle: DbHandle,
+  chunk: SQL,
+): Promise<T[]> {
+  if (handle.dialect === "postgres") {
+    return (await handle.db.execute(chunk)) as unknown as T[];
+  }
+  return handle.db.all(chunk);
+}
+
+/** Run a raw SQL statement on either dialect for its effect. */
+export async function sqlRun(handle: DbHandle, chunk: SQL): Promise<void> {
+  if (handle.dialect === "postgres") {
+    await handle.db.execute(chunk);
+  } else {
+    handle.db.run(chunk);
+  }
 }

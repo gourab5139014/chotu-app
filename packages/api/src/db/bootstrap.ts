@@ -1,6 +1,12 @@
-import { sql } from "drizzle-orm";
+import { fileURLToPath } from "node:url";
 
-import type { DbHandle } from "./index";
+import { sql } from "drizzle-orm";
+import { migrate as migrateSqlite } from "drizzle-orm/better-sqlite3/migrator";
+import { migrate as migratePostgres } from "drizzle-orm/postgres-js/migrator";
+
+import { mappers } from "./schema/mappers";
+import { CURRENT_SCHEMA_VERSION, isSchemaSupported } from "./schema/version";
+import { sqlQuery, sqlRun, type DbHandle } from "./index";
 
 /**
  * Bootstrap: create or upgrade Chotu's own schema, validate the schema version,
@@ -118,4 +124,99 @@ export async function probePrivileges(
   }
 
   return problems.length === 0 ? { ok: true } : fail(problems);
+}
+
+// ---------------------------------------------------------------------------
+// Migrate + schema version (T3.2)
+// ---------------------------------------------------------------------------
+
+const MIGRATIONS = {
+  postgres: fileURLToPath(new URL("./migrations/postgres", import.meta.url)),
+  sqlite: fileURLToPath(new URL("./migrations/sqlite", import.meta.url)),
+};
+
+export class SchemaVersionError extends Error {
+  constructor(
+    public readonly found: number,
+    public readonly current: number,
+  ) {
+    super(
+      `Database schema version ${found} is not supported by this build (expects ${current}). ` +
+        `Deploy a matching Chotu version or run its migrations.`,
+    );
+    this.name = "SchemaVersionError";
+  }
+}
+
+/** Apply every pending migration for the handle's dialect. */
+export async function runMigrations(handle: DbHandle): Promise<void> {
+  if (handle.dialect === "sqlite") {
+    migrateSqlite(handle.db, { migrationsFolder: MIGRATIONS.sqlite });
+  } else {
+    await migratePostgres(handle.db, { migrationsFolder: MIGRATIONS.postgres });
+  }
+}
+
+/** Upsert the `schema_meta` singleton to this build's schema version. */
+export async function writeSchemaMeta(
+  handle: DbHandle,
+  build: string,
+): Promise<void> {
+  const row = mappers.schemaMeta.toRow(
+    {
+      id: "singleton",
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      appliedAt: new Date(),
+      chotuBuild: build,
+    },
+    handle.dialect,
+  );
+  await sqlRun(
+    handle,
+    sql`insert into schema_meta (id, schema_version, applied_at, chotu_build)
+        values ('singleton', ${row.schemaVersion as number}, ${row.appliedAt as string | Date}, ${row.chotuBuild as string})
+        on conflict (id) do update set
+          schema_version = excluded.schema_version,
+          applied_at = excluded.applied_at,
+          chotu_build = excluded.chotu_build`,
+  );
+}
+
+/** Read `schema_meta.schema_version`, or null if the row is missing. */
+export async function readSchemaVersion(
+  handle: DbHandle,
+): Promise<number | null> {
+  const rows = await sqlQuery<{ schema_version: number }>(
+    handle,
+    sql`select schema_version from schema_meta where id = 'singleton'`,
+  );
+  const v = rows[0]?.schema_version;
+  return v == null ? null : Number(v);
+}
+
+/** Throw `SchemaVersionError` if the stored version is outside the window (FR-1.3). */
+export async function assertSchemaSupported(handle: DbHandle): Promise<void> {
+  const found = await readSchemaVersion(handle);
+  if (found == null || !isSchemaSupported(found)) {
+    throw new SchemaVersionError(found ?? -1, CURRENT_SCHEMA_VERSION);
+  }
+}
+
+/**
+ * The schema half of bootstrap (FR-1.2, FR-1.3): probe, migrate, record and
+ * validate the version. Seeding (settings + first admin + token) is T3.3.
+ */
+export async function bootstrapSchema(
+  handle: DbHandle,
+  opts: { build: string },
+): Promise<void> {
+  const probe = await probePrivileges(handle);
+  if (!probe.ok) {
+    const err = new Error(probe.message);
+    err.name = "BootstrapPrivilegeError";
+    throw err;
+  }
+  await runMigrations(handle);
+  await writeSchemaMeta(handle, opts.build);
+  await assertSchemaSupported(handle);
 }
