@@ -9,7 +9,7 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T3.5 (slice 3 complete)
+- **Last completed task:** T4.2
 - **Next task:** T4.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
@@ -130,7 +130,7 @@ pause with almost no rework.
   body), mounted in `app.ts`.
   *done when:* tests assert the error body shape and that a redacted field never
   appears in a captured log line.
-- [ ] **T4.2** `domain/errors.ts` closed union + HTTP mapping table from
+- [x] **T4.2** `domain/errors.ts` closed union + HTTP mapping table from
   `plan.md` section 12.
   *done when:* a test enumerates every code and its status.
 - [ ] **T4.3** Password sign-in (`@node-rs/argon2`), `session` create (`chs_`),
