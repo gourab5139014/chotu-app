@@ -6,6 +6,7 @@ import {
   AdminCreateInvitationBody,
   AdminCreateUserBody,
   AdminDeleteUserBody,
+  AdminUpdateSettingsBody,
 } from "../routes/admin";
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
 import { InvitationAcceptBody } from "../routes/invitations";
@@ -368,6 +369,48 @@ export function buildOpenApiDocument(): Json {
           },
         },
       },
+      "/admin/settings": {
+        get: {
+          operationId: "adminGetSettings",
+          summary: "Read the deployment settings",
+          description: "Admin only (FR-9.1).",
+          responses: {
+            "200": jsonResponse("The current settings", {
+              type: "object",
+              required: ["settings"],
+              properties: {
+                settings: { $ref: "#/components/schemas/DeploymentSettings" },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+          },
+        },
+        patch: {
+          operationId: "adminUpdateSettings",
+          summary: "Update the deployment settings",
+          description:
+            "Admin only (FR-9.1). `allowedAuthMethods` must stay non-empty; " +
+            "dropping `password` is refused while any user could be stranded " +
+            "by it (FR-9.2). `defaultCurrencyCode` is fixed to USD in M1.",
+          requestBody: jsonBody(bodySchema(AdminUpdateSettingsBody)),
+          responses: {
+            "200": jsonResponse("The updated settings", {
+              type: "object",
+              required: ["settings"],
+              properties: {
+                settings: { $ref: "#/components/schemas/DeploymentSettings" },
+              },
+            }),
+            "400": errorResponse("Malformed body or no field to change"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "422": errorResponse(
+              "Removing password would leave a user with no sign-in method",
+            ),
+          },
+        },
+      },
       "/admin/users": {
         get: {
           operationId: "adminListUsers",
@@ -558,6 +601,41 @@ export function buildOpenApiDocument(): Json {
               description: "Read-only in M1",
             },
             mustChangePassword: { type: "boolean" },
+          },
+        },
+        DeploymentSettings: {
+          type: "object",
+          required: [
+            "deploymentName",
+            "registrationPolicy",
+            "allowedAuthMethods",
+            "defaultUnitSystem",
+            "defaultCurrencyCode",
+            "defaultTimeZone",
+            "fuelVolumePrecision",
+            "sessionTtlSeconds",
+            "apiTokenTtlSeconds",
+          ],
+          properties: {
+            deploymentName: { type: "string" },
+            registrationPolicy: {
+              type: "string",
+              enum: ["invite_only", "open", "sso_auto"],
+            },
+            allowedAuthMethods: {
+              type: "array",
+              items: { type: "string", enum: ["password", "oidc"] },
+            },
+            defaultUnitSystem: { type: "string", enum: ["imperial", "metric"] },
+            defaultCurrencyCode: {
+              type: "string",
+              const: "USD",
+              description: "Read-only in M1",
+            },
+            defaultTimeZone: { type: "string", description: "IANA time zone" },
+            fuelVolumePrecision: { type: "integer", minimum: 1, maximum: 3 },
+            sessionTtlSeconds: { type: "integer", minimum: 60 },
+            apiTokenTtlSeconds: { type: ["integer", "null"], minimum: 60 },
           },
         },
         AdminUserListItem: {

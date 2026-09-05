@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T6a.3 (slice 6a complete)
-- **Next task:** T6b.1
+- **Last completed task:** T6b.1
+- **Next task:** T6b.2
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -224,7 +224,7 @@ pause with almost no rework.
 
 ## Slice 6b — Registration policy + verification
 
-- [ ] **T6b.1** Policy switch on `deployment_settings.registration_policy`
+- [x] **T6b.1** Policy switch on `deployment_settings.registration_policy`
   (FR-3.1) via `PATCH /admin/settings`; FR-9.2 guard on removing `password`.
   *done when:* removing `password` while a user has no identity is rejected
   `auth_method_required`.

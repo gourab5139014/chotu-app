@@ -524,6 +524,27 @@ export function issueUserTokenInTx(
   db.insert(s.userToken).values(mappers.userToken.toRow(row, a)).run();
 }
 
+/** Patch the `deployment_settings` singleton. `updatedAt` is set here. */
+export function updateSettingsInTx(
+  tx: Tx,
+  patch: Partial<Omit<DeploymentSettingsRow, "id" | "createdAt">>,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.deploymentSettings.toRow(
+    { ...patch, updatedAt: new Date() } as DeploymentSettingsRow,
+    a,
+  );
+  delete (values as any).id;
+  delete (values as any).createdAt;
+  return settle(
+    tx,
+    db
+      .update(s.deploymentSettings)
+      .set(values)
+      .where(eq(s.deploymentSettings.id, SINGLETON)),
+  );
+}
+
 /**
  * Issue an invitation, clearing a prior unaccepted one for the same email
  * (mirrors `issueUserTokenInTx`).
