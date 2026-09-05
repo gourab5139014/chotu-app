@@ -21,12 +21,14 @@ import type {
   NewSession,
   NewUser,
   NewUserToken,
+  NewVehicle,
   OidcLoginRow,
   OidcProviderRow,
   SchemaMetaRow,
   SessionRow,
   UserRow,
   UserTokenRow,
+  VehicleRow,
 } from "../db/schema/types";
 
 export interface SchemaMetaRepo {
@@ -124,6 +126,22 @@ export interface IdentityRepo {
   delete(id: string): Promise<void>;
 }
 
+export interface VehicleRepo {
+  create(v: NewVehicle): Promise<VehicleRow>;
+  findById(id: string): Promise<VehicleRow | null>;
+  /** Newest first. Archived vehicles are included unless `activeOnly`. */
+  listForUser(
+    userId: string,
+    opts?: { activeOnly?: boolean },
+  ): Promise<VehicleRow[]>;
+  countForUser(userId: string): Promise<number>;
+  update(
+    id: string,
+    patch: Partial<Omit<VehicleRow, "id" | "userId" | "createdAt">>,
+  ): Promise<VehicleRow>;
+  delete(id: string): Promise<void>;
+}
+
 export interface AuditRepo {
   /**
    * Append one audit row on the outer connection. When the row must commit or
@@ -152,4 +170,5 @@ export interface Repos {
   readonly oidcProviders: OidcProviderRepo;
   readonly oidcLogins: OidcLoginRepo;
   readonly identities: IdentityRepo;
+  readonly vehicles: VehicleRepo;
 }

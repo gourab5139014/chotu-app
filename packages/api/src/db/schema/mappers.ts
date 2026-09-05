@@ -21,6 +21,7 @@ import type {
   SessionRow,
   UserRow,
   UserTokenRow,
+  VehicleRow,
 } from "./types";
 
 type Raw = Record<string, unknown>;
@@ -114,6 +115,10 @@ const IDENTITY: TableMap = {
   instants: ["createdAt", "lastLoginAt"],
   safeInts: [],
 };
+const VEHICLE: TableMap = {
+  instants: ["archivedAt", "createdAt", "updatedAt"],
+  safeInts: ["initialOdometerMiE3"],
+};
 
 export const mappers = {
   schemaMeta: {
@@ -165,6 +170,10 @@ export const mappers = {
   identity: {
     toDomain: (r: Raw) => rowToDomain<IdentityRow>(r, IDENTITY),
     toRow: (d: Partial<IdentityRow>, a: Adapter) => domainToRow(d, IDENTITY, a),
+  },
+  vehicle: {
+    toDomain: (r: Raw) => rowToDomain<VehicleRow>(r, VEHICLE),
+    toRow: (d: Partial<VehicleRow>, a: Adapter) => domainToRow(d, VEHICLE, a),
   },
 } as const;
 

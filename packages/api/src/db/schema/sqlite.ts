@@ -276,3 +276,35 @@ export const identity = sqliteTable(
     index("identity_user_ix").on(t.userId),
   ],
 );
+
+export const vehicle = sqliteTable(
+  "vehicle",
+  {
+    id: f.uuidPk().sqlite,
+    userId: f
+      .uuidRef("user_id")
+      .sqlite.notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    name: f.text("name").sqlite.notNull(),
+    make: f.text("make").sqlite,
+    model: f.text("model").sqlite,
+    year: f.intNum("year").sqlite,
+    fuelType: f.text("fuel_type").sqlite,
+    initialOdometerMiE3: f.bigintNum("initial_odometer_mi_e3").sqlite.notNull(),
+    archivedAt: f.timestamptz("archived_at").sqlite,
+    createdAt: f.timestamptz("created_at").sqlite.notNull(),
+    updatedAt: f.timestamptz("updated_at").sqlite.notNull(),
+  },
+  (t) => [
+    uniqueIndex("vehicle_user_name_active_uq")
+      .on(t.userId, t.name)
+      .where(sql`${t.archivedAt} is null`),
+    index("vehicle_user_archived_ix").on(t.userId, t.archivedAt),
+    check("vehicle_initial_odometer_ck", sql`${t.initialOdometerMiE3} >= 0`),
+    check("vehicle_year_ck", sql`${t.year} is null or ${t.year} between 1900 and 2100`),
+    check(
+      "vehicle_fuel_type_ck",
+      sql`${t.fuelType} is null or ${t.fuelType} in ('gasoline', 'diesel', 'ev', 'hybrid', 'other')`,
+    ),
+  ],
+);

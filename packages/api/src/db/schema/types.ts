@@ -148,6 +148,25 @@ export interface IdentityRow {
   lastLoginAt: Date | null;
 }
 
+export type FuelType = "gasoline" | "diesel" | "ev" | "hybrid" | "other";
+
+export interface VehicleRow {
+  id: string;
+  userId: string;
+  /** 1..100 chars, unique per user among non-archived vehicles. */
+  name: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  fuelType: FuelType | null;
+  /** Thousandths of a mile. Canonical (D-1). */
+  initialOdometerMiE3: number;
+  /** Null means active. */
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface AuditLogRow {
   id: string;
   /** The admin or user who acted. Null for a system action. */
@@ -186,3 +205,7 @@ export type NewOidcLogin = Omit<OidcLoginRow, "createdAt" | "consumedAt">;
 export type NewIdentity = Omit<IdentityRow, "createdAt" | "lastLoginAt"> & {
   lastLoginAt?: Date | null;
 };
+export type NewVehicle = Omit<
+  VehicleRow,
+  "createdAt" | "updatedAt" | "archivedAt"
+>;
