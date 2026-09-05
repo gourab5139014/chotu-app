@@ -44,7 +44,7 @@ const MAX_INVITATION_TTL_SECONDS = 60 * 60 * 24 * 30;
  * transaction (AC-9). Any change that would drop the last active admin is
  * refused with `last_admin` under a `deployment_settings` lock (INV-6).
  */
-function userListItem(u: UserRow) {
+function userListItem(u: UserRow, vehicleCount = 0) {
   return {
     id: u.id,
     email: u.email,
@@ -52,8 +52,7 @@ function userListItem(u: UserRow) {
     role: u.role,
     status: u.status,
     createdAt: u.createdAt.toISOString(),
-    // Real count lands with the vehicle table (slice 8, T8.1).
-    vehicleCount: 0,
+    vehicleCount,
   };
 }
 
@@ -253,7 +252,12 @@ export function adminRoutes(deps: AppDeps): Hono<AppHono> {
   r.get("/users", async (c) => {
     const users = await deps.repos.users.list();
     users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    return c.json({ users: users.map(userListItem) });
+    const counts = await Promise.all(
+      users.map((u) => deps.repos.vehicles.countForUser(u.id)),
+    );
+    return c.json({
+      users: users.map((u, i) => userListItem(u, counts[i])),
+    });
   });
 
   // GET /admin/users/:id — one account plus last sign-in, linked identities,
@@ -262,9 +266,11 @@ export function adminRoutes(deps: AppDeps): Hono<AppHono> {
     const u = await deps.repos.users.findById(c.req.param("id"));
     if (u == null) throw err.notFound("User not found");
 
-    const [lastSeenAt, tokens] = await Promise.all([
+    const [lastSeenAt, tokens, identities, vehicleCount] = await Promise.all([
       deps.repos.sessions.latestActivityForUser(u.id),
       deps.repos.apiTokens.listForUser(u.id),
+      deps.repos.identities.listForUser(u.id),
+      deps.repos.vehicles.countForUser(u.id),
     ]);
     const now = Date.now();
     const activeTokenCount = tokens.filter(
@@ -275,10 +281,9 @@ export function adminRoutes(deps: AppDeps): Hono<AppHono> {
 
     return c.json({
       user: {
-        ...userListItem(u),
+        ...userListItem(u, vehicleCount),
         lastSignInAt: lastSeenAt?.toISOString() ?? null,
-        // The identity table lands in slice 7 (T7.1); shape is stable.
-        linkedIdentities: [] as string[],
+        linkedIdentities: identities.map((i) => i.providerKey),
         activeTokenCount,
       },
     });

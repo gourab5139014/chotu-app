@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T8.2
-- **Next task:** T8.3
+- **Last completed task:** T8.3 (slice 8 complete)
+- **Next task:** T9a.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -266,7 +266,7 @@ pause with almost no rework.
   zero rounding, `roundVolume`, `formatPrice`, distance display precision.
   *done when:* property test — imperial round trip is exact, metric round trip
   is stable at display precision (FR-15.4).
-- [ ] **T8.3** Vehicle routes: create (starting odometer in the caller's units),
+- [x] **T8.3** Vehicle routes: create (starting odometer in the caller's units),
   list, get, update, archive / unarchive, delete with cascade flag; wrong-owner
   → `404` (FR-11).
   *done when:* contract tests on both adapters; the isolation-matrix test covers

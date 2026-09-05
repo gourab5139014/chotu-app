@@ -177,6 +177,319 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /vehicles:
+    get:
+      operationId: listVehicles
+      summary: List the caller's vehicles
+      description: Requires authentication. Archived vehicles are hidden unless
+        ?includeArchived=true (FR-11.4).
+      parameters:
+        - name: includeArchived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: The caller's vehicles
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - vehicles
+                properties:
+                  vehicles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Vehicle"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createVehicle
+      summary: Create a vehicle
+      description: Requires authentication (FR-11.1). `initialOdometer` is in the
+        caller's own unit system.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                make:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  nullable: true
+                model:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  nullable: true
+                year:
+                  type: integer
+                  minimum: 1900
+                  maximum: 2100
+                  nullable: true
+                fuelType:
+                  type: string
+                  enum:
+                    - gasoline
+                    - diesel
+                    - ev
+                    - hybrid
+                    - other
+                  nullable: true
+                initialOdometer:
+                  type: number
+                  minimum: 0
+              required:
+                - name
+                - initialOdometer
+              additionalProperties: false
+      responses:
+        "201":
+          description: The new vehicle
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - vehicle
+                properties:
+                  vehicle:
+                    $ref: "#/components/schemas/Vehicle"
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A vehicle with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /vehicles/{id}:
+    get:
+      operationId: getVehicle
+      summary: Get one vehicle
+      description: Requires authentication. A vehicle the caller does not own is 404,
+        never 403 (FR-11.6).
+      parameters:
+        - &a1
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The vehicle
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - vehicle
+                properties:
+                  vehicle:
+                    $ref: "#/components/schemas/Vehicle"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such vehicle for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateVehicle
+      summary: Update a vehicle's editable fields
+      description: Requires authentication (FR-11.3). The starting odometer is fixed
+        at creation and cannot be changed here.
+      parameters:
+        - *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                make:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  nullable: true
+                model:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  nullable: true
+                year:
+                  type: integer
+                  minimum: 1900
+                  maximum: 2100
+                  nullable: true
+                fuelType:
+                  type: string
+                  enum:
+                    - gasoline
+                    - diesel
+                    - ev
+                    - hybrid
+                    - other
+                  nullable: true
+              additionalProperties: false
+      responses:
+        "200":
+          description: The updated vehicle
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - vehicle
+                properties:
+                  vehicle:
+                    $ref: "#/components/schemas/Vehicle"
+        "400":
+          description: Malformed body or no field to change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such vehicle for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A vehicle with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteVehicle
+      summary: Delete a vehicle
+      description: Requires authentication (FR-11.5). A `cascade` flag is reserved for
+        when a vehicle has fuel entries (slice 9); today a vehicle can never
+        have any, so delete always succeeds.
+      parameters:
+        - *a1
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such vehicle for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /vehicles/{id}/archive:
+    post:
+      operationId: archiveVehicle
+      summary: Archive a vehicle
+      description: Requires authentication (FR-11.4). Idempotent. An archived vehicle
+        is hidden from the default list and rejects new fuel entries; its
+        history stays readable.
+      parameters:
+        - *a1
+      responses:
+        "200":
+          description: The archived vehicle
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - vehicle
+                properties:
+                  vehicle:
+                    $ref: "#/components/schemas/Vehicle"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such vehicle for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /vehicles/{id}/unarchive:
+    post:
+      operationId: unarchiveVehicle
+      summary: Unarchive a vehicle
+      description: Requires authentication (FR-11.4). Idempotent.
+      parameters:
+        - *a1
+      responses:
+        "200":
+          description: The unarchived vehicle
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - vehicle
+                properties:
+                  vehicle:
+                    $ref: "#/components/schemas/Vehicle"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such vehicle for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /profile:
     get:
       operationId: getProfile
@@ -508,7 +821,7 @@ paths:
         endpoint (FR-6.2).
       security: []
       parameters:
-        - &a1
+        - &a2
           name: key
           in: path
           required: true
@@ -530,7 +843,7 @@ paths:
       description: Requires authentication (T7.4). Redirects (302) to the provider's
         authorization endpoint.
       parameters:
-        - *a1
+        - *a2
       responses:
         "302":
           description: Redirect to the provider
@@ -559,7 +872,7 @@ paths:
         mismatch all fail without creating anything.
       security: []
       parameters:
-        - *a1
+        - *a2
         - name: state
           in: query
           required: true
@@ -674,12 +987,7 @@ paths:
       description: Requires authentication (FR-6.3). Refused if this is the caller's
         only sign-in method.
       parameters:
-        - &a3
-          name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - *a1
       responses:
         "204":
           description: Unlinked
@@ -769,7 +1077,7 @@ paths:
                     type: string
                     minLength: 1
                   minItems: 1
-                  default: &a2
+                  default: &a3
                     - openid
                     - email
                     - profile
@@ -842,7 +1150,7 @@ paths:
       summary: Read one OIDC provider
       description: Admin only (FR-9.3).
       parameters:
-        - *a1
+        - *a2
       responses:
         "200":
           description: The provider
@@ -878,7 +1186,7 @@ paths:
       summary: Update an OIDC provider
       description: Admin only (FR-9.3). `key` cannot be changed.
       parameters:
-        - *a1
+        - *a2
       requestBody:
         required: true
         content:
@@ -906,7 +1214,7 @@ paths:
                     type: string
                     minLength: 1
                   minItems: 1
-                  default: *a2
+                  default: *a3
                 allowedEmailDomains:
                   type: array
                   items:
@@ -973,7 +1281,7 @@ paths:
         (`auth_method_required`) if that would leave any user with no sign-in
         method.
       parameters:
-        - *a1
+        - *a2
         - name: force
           in: query
           required: false
@@ -1386,7 +1694,7 @@ paths:
       description: Admin only. Adds last sign-in, linked identities, and the active
         API-token count. No fuel entry data is ever included (INV-9).
       parameters:
-        - *a3
+        - *a1
       responses:
         "200":
           description: The account
@@ -1424,7 +1732,7 @@ paths:
         Cascades vehicles, entries, tokens, sessions, identities. Refused for
         the last active admin (INV-6).
       parameters:
-        - *a3
+        - *a1
       requestBody:
         required: true
         content:
@@ -1478,7 +1786,7 @@ paths:
       description: Admin only (FR-8.4). Cuts the user's sessions and API tokens
         immediately. Refused for the last active admin (INV-6).
       parameters:
-        - *a3
+        - *a1
       responses:
         "204":
           description: Done (idempotent)
@@ -1512,7 +1820,7 @@ paths:
       summary: Reactivate an account
       description: Admin only (FR-8.4).
       parameters:
-        - *a3
+        - *a1
       responses:
         "204":
           description: Done (idempotent)
@@ -1546,7 +1854,7 @@ paths:
       summary: Grant the admin role
       description: Admin only (FR-8.7).
       parameters:
-        - *a3
+        - *a1
       responses:
         "204":
           description: Done (idempotent)
@@ -1580,7 +1888,7 @@ paths:
       summary: Revoke the admin role
       description: Admin only (FR-8.7). Refused for the last active admin (INV-6).
       parameters:
-        - *a3
+        - *a1
       responses:
         "204":
           description: Done (idempotent)
@@ -1615,7 +1923,7 @@ paths:
       description: Admin only (FR-8.5). Issues a reset link. The link is returned in
         the response when email is not configured (R-2 interim).
       parameters:
-        - *a3
+        - *a1
       responses:
         "200":
           description: Reset issued
@@ -1811,6 +2119,71 @@ components:
             - integer
             - "null"
           minimum: 60
+    Vehicle:
+      type: object
+      required:
+        - id
+        - name
+        - make
+        - model
+        - year
+        - fuelType
+        - initialOdometerMiE3
+        - initialOdometer
+        - unitSystem
+        - archivedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        make:
+          type:
+            - string
+            - "null"
+        model:
+          type:
+            - string
+            - "null"
+        year:
+          type:
+            - integer
+            - "null"
+        fuelType:
+          type:
+            - string
+            - "null"
+          enum:
+            - gasoline
+            - diesel
+            - ev
+            - hybrid
+            - other
+            - null
+        initialOdometerMiE3:
+          type: integer
+          description: "Canonical: thousandths of a mile (D-1)"
+        initialOdometer:
+          type: number
+          description: Display projection in unitSystem (FR-15.3)
+        unitSystem:
+          type: string
+          enum:
+            - imperial
+            - metric
+        archivedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     Identity:
       type: object
       required:

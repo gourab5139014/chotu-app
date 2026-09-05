@@ -9,6 +9,7 @@ import {
   AdminUpdateSettingsBody,
 } from "../routes/admin";
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
+import { VehicleCreateBody, VehicleUpdateBody } from "../routes/vehicles";
 import { InvitationAcceptBody } from "../routes/invitations";
 import {
   OidcProviderCreateBody,
@@ -203,6 +204,144 @@ export function buildOpenApiDocument(): Json {
             }),
             "401": errorResponse("Not authenticated"),
             "403": errorResponse("Password change required"),
+          },
+        },
+      },
+      "/vehicles": {
+        get: {
+          operationId: "listVehicles",
+          summary: "List the caller's vehicles",
+          description:
+            "Requires authentication. Archived vehicles are hidden unless " +
+            "?includeArchived=true (FR-11.4).",
+          parameters: [
+            {
+              name: "includeArchived",
+              in: "query",
+              required: false,
+              schema: { type: "boolean", default: false },
+            },
+          ],
+          responses: {
+            "200": jsonResponse("The caller's vehicles", {
+              type: "object",
+              required: ["vehicles"],
+              properties: {
+                vehicles: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/Vehicle" },
+                },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+          },
+        },
+        post: {
+          operationId: "createVehicle",
+          summary: "Create a vehicle",
+          description:
+            "Requires authentication (FR-11.1). `initialOdometer` is in the " +
+            "caller's own unit system.",
+          requestBody: jsonBody(bodySchema(VehicleCreateBody)),
+          responses: {
+            "201": jsonResponse("The new vehicle", {
+              type: "object",
+              required: ["vehicle"],
+              properties: { vehicle: { $ref: "#/components/schemas/Vehicle" } },
+            }),
+            "400": errorResponse("Malformed body"),
+            "401": errorResponse("Not authenticated"),
+            "409": errorResponse("A vehicle with this name already exists"),
+          },
+        },
+      },
+      "/vehicles/{id}": {
+        get: {
+          operationId: "getVehicle",
+          summary: "Get one vehicle",
+          description:
+            "Requires authentication. A vehicle the caller does not own is " +
+            "404, never 403 (FR-11.6).",
+          parameters: [idParam],
+          responses: {
+            "200": jsonResponse("The vehicle", {
+              type: "object",
+              required: ["vehicle"],
+              properties: { vehicle: { $ref: "#/components/schemas/Vehicle" } },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such vehicle for this user"),
+          },
+        },
+        patch: {
+          operationId: "updateVehicle",
+          summary: "Update a vehicle's editable fields",
+          description:
+            "Requires authentication (FR-11.3). The starting odometer is " +
+            "fixed at creation and cannot be changed here.",
+          parameters: [idParam],
+          requestBody: jsonBody(bodySchema(VehicleUpdateBody)),
+          responses: {
+            "200": jsonResponse("The updated vehicle", {
+              type: "object",
+              required: ["vehicle"],
+              properties: { vehicle: { $ref: "#/components/schemas/Vehicle" } },
+            }),
+            "400": errorResponse("Malformed body or no field to change"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such vehicle for this user"),
+            "409": errorResponse("A vehicle with this name already exists"),
+          },
+        },
+        delete: {
+          operationId: "deleteVehicle",
+          summary: "Delete a vehicle",
+          description:
+            "Requires authentication (FR-11.5). A `cascade` flag is reserved " +
+            "for when a vehicle has fuel entries (slice 9); today a vehicle " +
+            "can never have any, so delete always succeeds.",
+          parameters: [idParam],
+          responses: {
+            "204": emptyResponse("Deleted"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such vehicle for this user"),
+          },
+        },
+      },
+      "/vehicles/{id}/archive": {
+        post: {
+          operationId: "archiveVehicle",
+          summary: "Archive a vehicle",
+          description:
+            "Requires authentication (FR-11.4). Idempotent. An archived " +
+            "vehicle is hidden from the default list and rejects new fuel " +
+            "entries; its history stays readable.",
+          parameters: [idParam],
+          responses: {
+            "200": jsonResponse("The archived vehicle", {
+              type: "object",
+              required: ["vehicle"],
+              properties: { vehicle: { $ref: "#/components/schemas/Vehicle" } },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such vehicle for this user"),
+          },
+        },
+      },
+      "/vehicles/{id}/unarchive": {
+        post: {
+          operationId: "unarchiveVehicle",
+          summary: "Unarchive a vehicle",
+          description: "Requires authentication (FR-11.4). Idempotent.",
+          parameters: [idParam],
+          responses: {
+            "200": jsonResponse("The unarchived vehicle", {
+              type: "object",
+              required: ["vehicle"],
+              properties: { vehicle: { $ref: "#/components/schemas/Vehicle" } },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such vehicle for this user"),
           },
         },
       },
@@ -955,6 +1094,46 @@ export function buildOpenApiDocument(): Json {
             fuelVolumePrecision: { type: "integer", minimum: 1, maximum: 3 },
             sessionTtlSeconds: { type: "integer", minimum: 60 },
             apiTokenTtlSeconds: { type: ["integer", "null"], minimum: 60 },
+          },
+        },
+        Vehicle: {
+          type: "object",
+          required: [
+            "id",
+            "name",
+            "make",
+            "model",
+            "year",
+            "fuelType",
+            "initialOdometerMiE3",
+            "initialOdometer",
+            "unitSystem",
+            "archivedAt",
+            "createdAt",
+            "updatedAt",
+          ],
+          properties: {
+            id: { type: "string" },
+            name: { type: "string" },
+            make: { type: ["string", "null"] },
+            model: { type: ["string", "null"] },
+            year: { type: ["integer", "null"] },
+            fuelType: {
+              type: ["string", "null"],
+              enum: ["gasoline", "diesel", "ev", "hybrid", "other", null],
+            },
+            initialOdometerMiE3: {
+              type: "integer",
+              description: "Canonical: thousandths of a mile (D-1)",
+            },
+            initialOdometer: {
+              type: "number",
+              description: "Display projection in unitSystem (FR-15.3)",
+            },
+            unitSystem: { type: "string", enum: ["imperial", "metric"] },
+            archivedAt: { type: ["string", "null"], format: "date-time" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
           },
         },
         Identity: {

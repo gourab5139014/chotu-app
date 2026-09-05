@@ -18,6 +18,7 @@ import { oidcRoutes } from "./routes/oidc";
 import { profileRoutes } from "./routes/profile";
 import { registerRoutes } from "./routes/register";
 import { tokenRoutes } from "./routes/tokens";
+import { vehicleRoutes } from "./routes/vehicles";
 
 /**
  * Build the Chotu HTTP app. Resource routes are added slice by slice; this
@@ -55,6 +56,7 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
   app.route("/admin/oidc-providers", oidcAdminRoutes(deps));
   app.route("/auth/oidc", oidcRoutes(deps));
   app.route("/identities", identityRoutes(deps));
+  app.route("/vehicles", vehicleRoutes(deps));
   app.route("/invitations", invitationRoutes(deps));
   app.route("/", registerRoutes(deps));
 
