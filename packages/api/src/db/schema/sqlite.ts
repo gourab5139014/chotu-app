@@ -199,3 +199,80 @@ export const auditLog = sqliteTable(
     index("audit_log_target_ix").on(t.targetType, t.targetId),
   ],
 );
+
+export const oidcProvider = sqliteTable(
+  "oidc_provider",
+  {
+    id: f.uuidPk().sqlite,
+    key: f.text("key").sqlite.notNull(),
+    displayName: f.text("display_name").sqlite.notNull(),
+    issuerUrl: f.text("issuer_url").sqlite.notNull(),
+    clientId: f.text("client_id").sqlite.notNull(),
+    // Environment reference, e.g. "env:MY_PROVIDER_SECRET" (D-5, R-3). Never
+    // returned once written — write-only over the API (FR-9.3).
+    clientSecretRef: f.text("client_secret_ref").sqlite.notNull(),
+    scopes: f.json("scopes").sqlite.notNull(),
+    allowedEmailDomains: f.json("allowed_email_domains").sqlite,
+    allowedGroups: f.json("allowed_groups").sqlite,
+    autoProvision: f.bool("auto_provision").sqlite.notNull().default(false),
+    enabled: f.bool("enabled").sqlite.notNull().default(true),
+    createdAt: f.timestamptz("created_at").sqlite.notNull(),
+    updatedAt: f.timestamptz("updated_at").sqlite.notNull(),
+  },
+  (t) => [
+    uniqueIndex("oidc_provider_key_uq").on(t.key),
+    check(
+      "oidc_provider_key_ck",
+      sql`length(${t.key}) between 1 and 40 and ${t.key} not glob '*[^a-z0-9-]*'`,
+    ),
+  ],
+);
+
+export const oidcLogin = sqliteTable(
+  "oidc_login",
+  {
+    id: f.uuidPk().sqlite,
+    providerKey: f
+      .text("provider_key")
+      .sqlite.notNull()
+      .references(() => oidcProvider.key, { onDelete: "cascade" }),
+    stateHash: f.text("state_hash").sqlite.notNull(),
+    codeVerifier: f.text("code_verifier").sqlite.notNull(),
+    nonce: f.text("nonce").sqlite,
+    redirectTo: f.text("redirect_to").sqlite,
+    // Set only for an account-link attempt (Chotu extension beyond the
+    // data-model draft — see plan.md section 8 / T7.4): the signed-in user
+    // linking a new identity, captured at /start since /callback carries no
+    // caller credential.
+    linkUserId: f
+      .uuidRef("link_user_id")
+      .sqlite.references(() => user.id, { onDelete: "cascade" }),
+    expiresAt: f.timestamptz("expires_at").sqlite.notNull(),
+    consumedAt: f.timestamptz("consumed_at").sqlite,
+    createdAt: f.timestamptz("created_at").sqlite.notNull(),
+  },
+  (t) => [uniqueIndex("oidc_login_state_hash_uq").on(t.stateHash)],
+);
+
+export const identity = sqliteTable(
+  "identity",
+  {
+    id: f.uuidPk().sqlite,
+    userId: f
+      .uuidRef("user_id")
+      .sqlite.notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    providerKey: f
+      .text("provider_key")
+      .sqlite.notNull()
+      .references(() => oidcProvider.key, { onDelete: "restrict" }),
+    subject: f.text("subject").sqlite.notNull(),
+    emailAtLink: f.text("email_at_link").sqlite,
+    createdAt: f.timestamptz("created_at").sqlite.notNull(),
+    lastLoginAt: f.timestamptz("last_login_at").sqlite,
+  },
+  (t) => [
+    uniqueIndex("identity_provider_subject_uq").on(t.providerKey, t.subject),
+    index("identity_user_ix").on(t.userId),
+  ],
+);

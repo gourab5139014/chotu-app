@@ -103,6 +103,51 @@ export interface InvitationRow {
   createdAt: Date;
 }
 
+export interface OidcProviderRow {
+  id: string;
+  /** Slug, unique, used in URLs. `^[a-z0-9-]{1,40}$`. */
+  key: string;
+  displayName: string;
+  issuerUrl: string;
+  clientId: string;
+  /** An environment reference, e.g. "env:NAME" (D-5, R-3). Write-only. */
+  clientSecretRef: string;
+  scopes: string[];
+  /** Null means any domain is allowed. */
+  allowedEmailDomains: string[] | null;
+  /** Null means any group is allowed. */
+  allowedGroups: string[] | null;
+  autoProvision: boolean;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface OidcLoginRow {
+  id: string;
+  providerKey: string;
+  stateHash: string;
+  codeVerifier: string;
+  nonce: string | null;
+  redirectTo: string | null;
+  /** Set only for an account-link attempt (Chotu extension, T7.4). */
+  linkUserId: string | null;
+  expiresAt: Date;
+  consumedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface IdentityRow {
+  id: string;
+  userId: string;
+  providerKey: string;
+  /** The `sub` claim from the provider. */
+  subject: string;
+  emailAtLink: string | null;
+  createdAt: Date;
+  lastLoginAt: Date | null;
+}
+
 export interface AuditLogRow {
   id: string;
   /** The admin or user who acted. Null for a system action. */
@@ -136,3 +181,8 @@ export type NewInvitation = Omit<
   InvitationRow,
   "createdAt" | "acceptedAt" | "acceptedUserId"
 >;
+export type NewOidcProvider = Omit<OidcProviderRow, "createdAt" | "updatedAt">;
+export type NewOidcLogin = Omit<OidcLoginRow, "createdAt" | "consumedAt">;
+export type NewIdentity = Omit<IdentityRow, "createdAt" | "lastLoginAt"> & {
+  lastLoginAt?: Date | null;
+};

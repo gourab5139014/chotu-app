@@ -193,3 +193,77 @@ export const auditLog = pgTable(
     index("audit_log_target_ix").on(t.targetType, t.targetId),
   ],
 );
+
+export const oidcProvider = pgTable(
+  "oidc_provider",
+  {
+    id: f.uuidPk().pg,
+    key: f.text("key").pg.notNull(),
+    displayName: f.text("display_name").pg.notNull(),
+    issuerUrl: f.text("issuer_url").pg.notNull(),
+    clientId: f.text("client_id").pg.notNull(),
+    // Environment reference, e.g. "env:MY_PROVIDER_SECRET" (D-5, R-3). Never
+    // returned once written — write-only over the API (FR-9.3).
+    clientSecretRef: f.text("client_secret_ref").pg.notNull(),
+    scopes: f.json("scopes").pg.notNull(),
+    allowedEmailDomains: f.json("allowed_email_domains").pg,
+    allowedGroups: f.json("allowed_groups").pg,
+    autoProvision: f.bool("auto_provision").pg.notNull().default(false),
+    enabled: f.bool("enabled").pg.notNull().default(true),
+    createdAt: f.timestamptz("created_at").pg.notNull(),
+    updatedAt: f.timestamptz("updated_at").pg.notNull(),
+  },
+  (t) => [
+    uniqueIndex("oidc_provider_key_uq").on(t.key),
+    check("oidc_provider_key_ck", sql`${t.key} ~ '^[a-z0-9-]{1,40}$'`),
+  ],
+);
+
+export const oidcLogin = pgTable(
+  "oidc_login",
+  {
+    id: f.uuidPk().pg,
+    providerKey: f
+      .text("provider_key")
+      .pg.notNull()
+      .references(() => oidcProvider.key, { onDelete: "cascade" }),
+    stateHash: f.text("state_hash").pg.notNull(),
+    codeVerifier: f.text("code_verifier").pg.notNull(),
+    nonce: f.text("nonce").pg,
+    redirectTo: f.text("redirect_to").pg,
+    // Set only for an account-link attempt (Chotu extension beyond the
+    // data-model draft — see plan.md section 8 / T7.4): the signed-in user
+    // linking a new identity, captured at /start since /callback carries no
+    // caller credential.
+    linkUserId: f
+      .uuidRef("link_user_id")
+      .pg.references(() => user.id, { onDelete: "cascade" }),
+    expiresAt: f.timestamptz("expires_at").pg.notNull(),
+    consumedAt: f.timestamptz("consumed_at").pg,
+    createdAt: f.timestamptz("created_at").pg.notNull(),
+  },
+  (t) => [uniqueIndex("oidc_login_state_hash_uq").on(t.stateHash)],
+);
+
+export const identity = pgTable(
+  "identity",
+  {
+    id: f.uuidPk().pg,
+    userId: f
+      .uuidRef("user_id")
+      .pg.notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    providerKey: f
+      .text("provider_key")
+      .pg.notNull()
+      .references(() => oidcProvider.key, { onDelete: "restrict" }),
+    subject: f.text("subject").pg.notNull(),
+    emailAtLink: f.text("email_at_link").pg,
+    createdAt: f.timestamptz("created_at").pg.notNull(),
+    lastLoginAt: f.timestamptz("last_login_at").pg,
+  },
+  (t) => [
+    uniqueIndex("identity_provider_subject_uq").on(t.providerKey, t.subject),
+    index("identity_user_ix").on(t.userId),
+  ],
+);

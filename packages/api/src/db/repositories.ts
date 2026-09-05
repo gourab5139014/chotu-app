@@ -11,13 +11,19 @@ import type {
   ApiTokenRow,
   AuditLogRow,
   DeploymentSettingsRow,
+  IdentityRow,
   InvitationRow,
   NewApiToken,
   NewAuditLog,
+  NewIdentity,
   NewInvitation,
+  NewOidcLogin,
+  NewOidcProvider,
   NewSession,
   NewUser,
   NewUserToken,
+  OidcLoginRow,
+  OidcProviderRow,
   SchemaMetaRow,
   SessionRow,
   UserRow,
@@ -351,6 +357,136 @@ export function makeRepos(handle: DbHandle): Repos {
             ),
           )
           .where(eq(s.invitation.id, id));
+      },
+    },
+
+    oidcProviders: {
+      async create(p: NewOidcProvider) {
+        const ts = now();
+        const row: OidcProviderRow = { ...p, createdAt: ts, updatedAt: ts };
+        await db.insert(s.oidcProvider).values(mappers.oidcProvider.toRow(row, a));
+        return row;
+      },
+      async findByKey(key) {
+        const rows = await db
+          .select()
+          .from(s.oidcProvider)
+          .where(eq(s.oidcProvider.key, key))
+          .limit(1);
+        return first<OidcProviderRow>(rows, mappers.oidcProvider.toDomain);
+      },
+      async list() {
+        const rows = await db.select().from(s.oidcProvider);
+        return rows.map((r: any) => mappers.oidcProvider.toDomain(r));
+      },
+      async update(key, patch) {
+        const values = mappers.oidcProvider.toRow(
+          { ...patch, updatedAt: now() },
+          a,
+        );
+        const rows = await returningAll(
+          db
+            .update(s.oidcProvider)
+            .set(values)
+            .where(eq(s.oidcProvider.key, key)),
+        );
+        const updated = first<OidcProviderRow>(rows, mappers.oidcProvider.toDomain);
+        if (updated == null) throw new Error(`oidc_provider ${key} not found`);
+        return updated;
+      },
+      async delete(key) {
+        await db.delete(s.oidcProvider).where(eq(s.oidcProvider.key, key));
+      },
+    },
+
+    oidcLogins: {
+      async create(row: NewOidcLogin) {
+        const full: OidcLoginRow = { ...row, consumedAt: null, createdAt: now() };
+        await db.insert(s.oidcLogin).values(mappers.oidcLogin.toRow(full, a));
+        return full;
+      },
+      async findByStateHash(stateHash) {
+        const rows = await db
+          .select()
+          .from(s.oidcLogin)
+          .where(eq(s.oidcLogin.stateHash, stateHash))
+          .limit(1);
+        return first<OidcLoginRow>(rows, mappers.oidcLogin.toDomain);
+      },
+      async consume(id, at) {
+        await db
+          .update(s.oidcLogin)
+          .set(mappers.oidcLogin.toRow({ consumedAt: at }, a))
+          .where(eq(s.oidcLogin.id, id));
+      },
+      async deleteExpired(nowAt) {
+        const rows = await returningAll(
+          db
+            .delete(s.oidcLogin)
+            .where(
+              lte(
+                s.oidcLogin.expiresAt,
+                a === "sqlite" ? nowAt.toISOString() : (nowAt as any),
+              ),
+            ),
+        );
+        return rows.length;
+      },
+    },
+
+    identities: {
+      async create(i: NewIdentity) {
+        const row: IdentityRow = {
+          ...i,
+          lastLoginAt: i.lastLoginAt ?? null,
+          createdAt: now(),
+        };
+        await db.insert(s.identity).values(mappers.identity.toRow(row, a));
+        return row;
+      },
+      async findByProviderSubject(providerKey, subject) {
+        const rows = await db
+          .select()
+          .from(s.identity)
+          .where(
+            and(
+              eq(s.identity.providerKey, providerKey),
+              eq(s.identity.subject, subject),
+            ),
+          )
+          .limit(1);
+        return first<IdentityRow>(rows, mappers.identity.toDomain);
+      },
+      async findById(id) {
+        const rows = await db
+          .select()
+          .from(s.identity)
+          .where(eq(s.identity.id, id))
+          .limit(1);
+        return first<IdentityRow>(rows, mappers.identity.toDomain);
+      },
+      async listForUser(userId) {
+        const rows = await db
+          .select()
+          .from(s.identity)
+          .where(eq(s.identity.userId, userId));
+        return rows.map((r: any) => mappers.identity.toDomain(r));
+      },
+      async countForProvider(providerKey) {
+        const rows = await db
+          .select({ n: sql<number>`count(*)` })
+          .from(s.identity)
+          .where(eq(s.identity.providerKey, providerKey));
+        return Number(rows[0]?.n ?? 0);
+      },
+      async touchLogin(id, at) {
+        await db
+          .update(s.identity)
+          .set(mappers.identity.toRow({ lastLoginAt: at }, a))
+          .where(eq(s.identity.id, id));
+      },
+      async delete(id) {
+        await db.delete(s.identity).where(eq(s.identity.id, id));
       },
     },
   };
