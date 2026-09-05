@@ -376,6 +376,108 @@ export function buildOpenApiDocument(): Json {
           },
         },
       },
+      "/auth/oidc/{key}/start": {
+        get: {
+          operationId: "oidcStart",
+          summary: "Begin an OIDC sign-in",
+          description:
+            "Unauthenticated. Redirects (302) to the provider's authorization " +
+            "endpoint (FR-6.2).",
+          security: [],
+          parameters: [oidcKeyParam],
+          responses: {
+            "302": emptyResponse("Redirect to the provider"),
+            "404": errorResponse("No such provider, or it is disabled"),
+          },
+        },
+      },
+      "/auth/oidc/{key}/link/start": {
+        get: {
+          operationId: "oidcLinkStart",
+          summary: "Begin linking a new identity to the caller's account",
+          description:
+            "Requires authentication (T7.4). Redirects (302) to the " +
+            "provider's authorization endpoint.",
+          parameters: [oidcKeyParam],
+          responses: {
+            "302": emptyResponse("Redirect to the provider"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such provider, or it is disabled"),
+          },
+        },
+      },
+      "/auth/oidc/{key}/callback": {
+        get: {
+          operationId: "oidcCallback",
+          summary: "Complete an OIDC sign-in or link",
+          description:
+            "Unauthenticated (the provider redirects the browser here with no " +
+            "Chotu credential). Signs in on a returning identity, " +
+            "auto-provisions a new account when the provider and the " +
+            "deployment's registration_policy both allow it, or links the " +
+            "identity to the user who started a /link/start attempt. An " +
+            "expired, unknown, or already-consumed attempt, an out-of-domain " +
+            "or out-of-group identity (AC-11), or a provider mismatch all " +
+            "fail without creating anything.",
+          security: [],
+          parameters: [
+            oidcKeyParam,
+            {
+              name: "state",
+              in: "query",
+              required: true,
+              schema: { type: "string" },
+            },
+            {
+              name: "code",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": jsonResponse(
+              "Signed in (or a /link/start attempt completed)",
+              {
+                oneOf: [
+                  {
+                    type: "object",
+                    required: ["user", "session", "expiresAt"],
+                    properties: {
+                      user: { $ref: "#/components/schemas/PublicUser" },
+                      session: { type: "string" },
+                      expiresAt: { type: "string", format: "date-time" },
+                    },
+                  },
+                  {
+                    type: "object",
+                    required: ["linked", "providerKey"],
+                    properties: {
+                      linked: { type: "boolean", const: true },
+                      providerKey: { type: "string" },
+                    },
+                  },
+                ],
+              },
+            ),
+            "201": jsonResponse("Auto-provisioned and signed in", {
+              type: "object",
+              required: ["user", "session", "expiresAt"],
+              properties: {
+                user: { $ref: "#/components/schemas/PublicUser" },
+                session: { type: "string" },
+                expiresAt: { type: "string", format: "date-time" },
+              },
+            }),
+            "401": errorResponse("Invalid, expired, or already-used attempt"),
+            "403": errorResponse(
+              "Disabled provider, out-of-domain/group identity, or no email claim",
+            ),
+            "404": errorResponse("No such provider or user"),
+            "409": errorResponse("Already linked to a different user, or email taken"),
+          },
+        },
+      },
       "/admin/oidc-providers": {
         get: {
           operationId: "adminListOidcProviders",

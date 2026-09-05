@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T7.2
-- **Next task:** T7.3
+- **Last completed task:** T7.3 + T7.5 (built together — the mock issuer is T7.3's test infra)
+- **Next task:** T7.4
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -243,7 +243,7 @@ pause with almost no rework.
   returned; delete rejected `provider_in_use` unless `force` (then unlink +
   re-check FR-6.3).
   *done when:* contract tests pass; a GET never includes the secret.
-- [ ] **T7.3** `GET /auth/oidc/:key/start` (create `oidc_login`, redirect) and
+- [x] **T7.3** `GET /auth/oidc/:key/start` (create `oidc_login`, redirect) and
   `/callback` (hash `state`, look up by `state_hash`, validate token+nonce,
   match/create `identity`, enforce domains/groups, auto-provision on
   `sso_auto`, consume, start session) — FR-6.2, FR-6.4.
@@ -253,7 +253,7 @@ pause with almost no rework.
   when it would leave no sign-in method (FR-6.3).
   *done when:* link works; the last-method unlink is rejected
   `auth_method_required`.
-- [ ] **T7.5** Mock OIDC issuer in `test/support`: discovery doc, JWKS, signed
+- [x] **T7.5** Mock OIDC issuer in `test/support`: discovery doc, JWKS, signed
   ID tokens, configurable `email` / `groups`. `oidc` fixture.
   *done when:* `openid-client` v6 validates the mock tokens end to end.
 

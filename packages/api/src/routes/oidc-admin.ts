@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
+import { forgetOidcConfiguration } from "../auth/oidc";
 import {
   deleteIdentityInTx,
   deleteOidcProviderInTx,
@@ -161,6 +162,7 @@ export function oidcAdminRoutes(deps: AppDeps): Hono<AppHono> {
         }),
     ]);
 
+    forgetOidcConfiguration(key);
     const updated = await deps.repos.oidcProviders.findByKey(key);
     return c.json({ provider: publicProvider(updated!) });
   });
@@ -211,6 +213,7 @@ export function oidcAdminRoutes(deps: AppDeps): Hono<AppHono> {
         }),
     ]);
 
+    forgetOidcConfiguration(key);
     return c.body(null, 204);
   });
 
