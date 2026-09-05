@@ -118,6 +118,7 @@ export interface IdentityRepo {
   ): Promise<IdentityRow | null>;
   findById(id: string): Promise<IdentityRow | null>;
   listForUser(userId: string): Promise<IdentityRow[]>;
+  listForProvider(providerKey: string): Promise<IdentityRow[]>;
   countForProvider(providerKey: string): Promise<number>;
   touchLogin(id: string, at: Date): Promise<void>;
   delete(id: string): Promise<void>;

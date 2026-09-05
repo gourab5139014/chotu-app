@@ -472,6 +472,13 @@ export function makeRepos(handle: DbHandle): Repos {
           .where(eq(s.identity.userId, userId));
         return rows.map((r: any) => mappers.identity.toDomain(r));
       },
+      async listForProvider(providerKey) {
+        const rows = await db
+          .select()
+          .from(s.identity)
+          .where(eq(s.identity.providerKey, providerKey));
+        return rows.map((r: any) => mappers.identity.toDomain(r));
+      },
       async countForProvider(providerKey) {
         const rows = await db
           .select({ n: sql<number>`count(*)` })
@@ -748,4 +755,82 @@ export function guardLastAdminInTx(tx: Tx, target: UserRow): unknown {
   return n.then((count) => {
     if (count <= 1) throw err.lastAdmin();
   });
+}
+
+/** Insert a fully-formed OIDC provider row. */
+export function insertOidcProviderInTx(
+  tx: Tx,
+  row: OidcProviderRow,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  return settle(
+    tx,
+    db.insert(s.oidcProvider).values(mappers.oidcProvider.toRow(row, a)),
+  );
+}
+
+/** Patch an OIDC provider by key. `updatedAt` is set here. */
+export function updateOidcProviderInTx(
+  tx: Tx,
+  key: string,
+  patch: Partial<Omit<OidcProviderRow, "id" | "key" | "createdAt">>,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.oidcProvider.toRow({ ...patch, updatedAt: new Date() }, a);
+  return settle(
+    tx,
+    db.update(s.oidcProvider).set(values).where(eq(s.oidcProvider.key, key)),
+  );
+}
+
+/** Delete an OIDC provider by key. */
+export function deleteOidcProviderInTx(tx: Tx, key: string): void | Promise<void> {
+  const { db, s } = txParts(tx);
+  return settle(tx, db.delete(s.oidcProvider).where(eq(s.oidcProvider.key, key)));
+}
+
+/** Delete one identity row (unlink). */
+export function deleteIdentityInTx(tx: Tx, id: string): void | Promise<void> {
+  const { db, s } = txParts(tx);
+  return settle(tx, db.delete(s.identity).where(eq(s.identity.id, id)));
+}
+
+/** Insert an identity row linking a user to an OIDC subject. */
+export function insertIdentityInTx(
+  tx: Tx,
+  row: IdentityRow,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  return settle(tx, db.insert(s.identity).values(mappers.identity.toRow(row, a)));
+}
+
+/** Touch `identity.last_login_at`. */
+export function touchIdentityInTx(
+  tx: Tx,
+  id: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.identity.toRow({ lastLoginAt: at }, a);
+  return settle(tx, db.update(s.identity).set(values).where(eq(s.identity.id, id)));
+}
+
+/** Create an OIDC login's oidc_login row. */
+export function insertOidcLoginInTx(
+  tx: Tx,
+  row: OidcLoginRow,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  return settle(tx, db.insert(s.oidcLogin).values(mappers.oidcLogin.toRow(row, a)));
+}
+
+/** Mark an `oidc_login` row consumed. */
+export function consumeOidcLoginInTx(
+  tx: Tx,
+  id: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.oidcLogin.toRow({ consumedAt: at }, a);
+  return settle(tx, db.update(s.oidcLogin).set(values).where(eq(s.oidcLogin.id, id)));
 }

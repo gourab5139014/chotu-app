@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T7.1
-- **Next task:** T7.2
+- **Last completed task:** T7.2
+- **Next task:** T7.3
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -239,7 +239,7 @@ pause with almost no rework.
 - [x] **T7.1** `oidc_provider` and `oidc_login` tables + repos + `identity`
   table + `IdentityRepo` (both dialects; FKs per `data-model.md`).
   *done when:* `drizzle-kit check` green; repo tests pass.
-- [ ] **T7.2** Admin provider CRUD (FR-6.1, FR-9.3): secret write-only, never
+- [x] **T7.2** Admin provider CRUD (FR-6.1, FR-9.3): secret write-only, never
   returned; delete rejected `provider_in_use` unless `force` (then unlink +
   re-check FR-6.3).
   *done when:* contract tests pass; a GET never includes the secret.

@@ -12,6 +12,7 @@ import { requestId } from "./middleware/request-id";
 import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
 import { invitationRoutes } from "./routes/invitations";
+import { oidcAdminRoutes } from "./routes/oidc-admin";
 import { profileRoutes } from "./routes/profile";
 import { registerRoutes } from "./routes/register";
 import { tokenRoutes } from "./routes/tokens";
@@ -49,6 +50,7 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
   app.route("/profile", profileRoutes(deps));
   app.route("/tokens", tokenRoutes(deps));
   app.route("/admin", adminRoutes(deps));
+  app.route("/admin/oidc-providers", oidcAdminRoutes(deps));
   app.route("/invitations", invitationRoutes(deps));
   app.route("/", registerRoutes(deps));
 

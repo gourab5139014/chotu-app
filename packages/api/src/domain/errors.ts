@@ -16,6 +16,7 @@ export type ErrorCode =
   | "odometer_decrease"
   | "last_admin"
   | "auth_method_required"
+  | "provider_in_use"
   | "rate_limited"
   | "internal_error";
 
@@ -31,6 +32,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   odometer_decrease: 422,
   last_admin: 422,
   auth_method_required: 422,
+  provider_in_use: 409,
   rate_limited: 429,
   internal_error: 500,
 };
@@ -94,6 +96,9 @@ export const err = {
     ),
   authMethodRequired: (message = "At least one sign-in method must remain.") =>
     new AppError("auth_method_required", message),
+  providerInUse: (
+    message = "This provider has linked identities. Pass force to unlink them and delete it.",
+  ) => new AppError("provider_in_use", message),
   rateLimited: (message = "Too many requests. Try again later.") =>
     new AppError("rate_limited", message),
 };

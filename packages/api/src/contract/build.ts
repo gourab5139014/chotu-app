@@ -10,6 +10,10 @@ import {
 } from "../routes/admin";
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
 import { InvitationAcceptBody } from "../routes/invitations";
+import {
+  OidcProviderCreateBody,
+  OidcProviderUpdateBody,
+} from "../routes/oidc-admin";
 import { ProfileUpdateBody } from "../routes/profile";
 import { RegisterBody, VerifyBody } from "../routes/register";
 import { TokenCreateBody } from "../routes/tokens";
@@ -64,6 +68,13 @@ const emptyResponse = (description: string): Json => ({ description });
 
 const idParam: Json = {
   name: "id",
+  in: "path",
+  required: true,
+  schema: { type: "string" },
+};
+
+const oidcKeyParam: Json = {
+  name: "key",
   in: "path",
   required: true,
   schema: { type: "string" },
@@ -362,6 +373,120 @@ export function buildOpenApiDocument(): Json {
             "400": errorResponse("Malformed body"),
             "404": errorResponse("Invalid, expired, or already-used link"),
             "429": errorResponse("Rate limited; see Retry-After"),
+          },
+        },
+      },
+      "/admin/oidc-providers": {
+        get: {
+          operationId: "adminListOidcProviders",
+          summary: "List OIDC providers",
+          description:
+            "Admin only (FR-9.3). The client secret reference is never " +
+            "returned; `secretConfigured` is always true.",
+          responses: {
+            "200": jsonResponse("Every configured provider", {
+              type: "object",
+              required: ["providers"],
+              properties: {
+                providers: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/OidcProvider" },
+                },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+          },
+        },
+        post: {
+          operationId: "adminCreateOidcProvider",
+          summary: "Add an OIDC provider",
+          description:
+            "Admin only (FR-6.1). `clientSecretRef` is an environment " +
+            'reference, for example "env:MY_PROVIDER_SECRET" — the operator ' +
+            "sets that variable on the host; Chotu never stores the raw secret.",
+          requestBody: jsonBody(bodySchema(OidcProviderCreateBody)),
+          responses: {
+            "201": jsonResponse("The new provider", {
+              type: "object",
+              required: ["provider"],
+              properties: {
+                provider: { $ref: "#/components/schemas/OidcProvider" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "409": errorResponse("That provider key is already in use"),
+          },
+        },
+      },
+      "/admin/oidc-providers/{key}": {
+        get: {
+          operationId: "adminGetOidcProvider",
+          summary: "Read one OIDC provider",
+          description: "Admin only (FR-9.3).",
+          parameters: [oidcKeyParam],
+          responses: {
+            "200": jsonResponse("The provider", {
+              type: "object",
+              required: ["provider"],
+              properties: {
+                provider: { $ref: "#/components/schemas/OidcProvider" },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "404": errorResponse("No such provider"),
+          },
+        },
+        patch: {
+          operationId: "adminUpdateOidcProvider",
+          summary: "Update an OIDC provider",
+          description: "Admin only (FR-9.3). `key` cannot be changed.",
+          parameters: [oidcKeyParam],
+          requestBody: jsonBody(bodySchema(OidcProviderUpdateBody)),
+          responses: {
+            "200": jsonResponse("The updated provider", {
+              type: "object",
+              required: ["provider"],
+              properties: {
+                provider: { $ref: "#/components/schemas/OidcProvider" },
+              },
+            }),
+            "400": errorResponse("Malformed body or no field to change"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "404": errorResponse("No such provider"),
+          },
+        },
+        delete: {
+          operationId: "adminDeleteOidcProvider",
+          summary: "Delete an OIDC provider",
+          description:
+            "Admin only. Refused with `provider_in_use` while any identity " +
+            "is linked to this provider, unless `?force=true`, which unlinks " +
+            "every affected identity first and refuses the whole delete " +
+            "(`auth_method_required`) if that would leave any user with no " +
+            "sign-in method.",
+          parameters: [
+            oidcKeyParam,
+            {
+              name: "force",
+              in: "query",
+              required: false,
+              schema: { type: "boolean", default: false },
+            },
+          ],
+          responses: {
+            "204": emptyResponse("Deleted"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "404": errorResponse("No such provider"),
+            "409": errorResponse("Linked identities exist; retry with force"),
+            "422": errorResponse(
+              "Force-deleting would leave a user with no sign-in method",
+            ),
           },
         },
       },
@@ -692,6 +817,46 @@ export function buildOpenApiDocument(): Json {
             fuelVolumePrecision: { type: "integer", minimum: 1, maximum: 3 },
             sessionTtlSeconds: { type: "integer", minimum: 60 },
             apiTokenTtlSeconds: { type: ["integer", "null"], minimum: 60 },
+          },
+        },
+        OidcProvider: {
+          type: "object",
+          required: [
+            "id",
+            "key",
+            "displayName",
+            "issuerUrl",
+            "clientId",
+            "secretConfigured",
+            "scopes",
+            "allowedEmailDomains",
+            "allowedGroups",
+            "autoProvision",
+            "enabled",
+            "createdAt",
+            "updatedAt",
+          ],
+          properties: {
+            id: { type: "string" },
+            key: { type: "string" },
+            displayName: { type: "string" },
+            issuerUrl: { type: "string", format: "uri" },
+            clientId: { type: "string" },
+            secretConfigured: {
+              type: "boolean",
+              const: true,
+              description: "The client secret is write-only and never returned",
+            },
+            scopes: { type: "array", items: { type: "string" } },
+            allowedEmailDomains: {
+              type: ["array", "null"],
+              items: { type: "string" },
+            },
+            allowedGroups: { type: ["array", "null"], items: { type: "string" } },
+            autoProvision: { type: "boolean" },
+            enabled: { type: "boolean" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
           },
         },
         AdminUserListItem: {

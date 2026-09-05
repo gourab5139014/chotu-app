@@ -500,6 +500,323 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /admin/oidc-providers:
+    get:
+      operationId: adminListOidcProviders
+      summary: List OIDC providers
+      description: Admin only (FR-9.3). The client secret reference is never returned;
+        `secretConfigured` is always true.
+      responses:
+        "200":
+          description: Every configured provider
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - providers
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OidcProvider"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: adminCreateOidcProvider
+      summary: Add an OIDC provider
+      description: Admin only (FR-6.1). `clientSecretRef` is an environment reference,
+        for example "env:MY_PROVIDER_SECRET" — the operator sets that variable
+        on the host; Chotu never stores the raw secret.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  pattern: ^[a-z0-9-]{1,40}$
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                issuerUrl:
+                  type: string
+                  format: uri
+                clientId:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                clientSecretRef:
+                  type: string
+                  pattern: ^env:[A-Za-z_][A-Za-z0-9_]*$
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                  minItems: 1
+                  default: &a2
+                    - openid
+                    - email
+                    - profile
+                allowedEmailDomains:
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                  nullable: true
+                  default: null
+                allowedGroups:
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                  nullable: true
+                  default: null
+                autoProvision:
+                  type: boolean
+                  default: false
+                enabled:
+                  type: boolean
+                  default: true
+              required:
+                - key
+                - displayName
+                - issuerUrl
+                - clientId
+                - clientSecretRef
+              additionalProperties: false
+      responses:
+        "201":
+          description: The new provider
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - provider
+                properties:
+                  provider:
+                    $ref: "#/components/schemas/OidcProvider"
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: That provider key is already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/oidc-providers/{key}:
+    get:
+      operationId: adminGetOidcProvider
+      summary: Read one OIDC provider
+      description: Admin only (FR-9.3).
+      parameters:
+        - &a1
+          name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The provider
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - provider
+                properties:
+                  provider:
+                    $ref: "#/components/schemas/OidcProvider"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: adminUpdateOidcProvider
+      summary: Update an OIDC provider
+      description: Admin only (FR-9.3). `key` cannot be changed.
+      parameters:
+        - *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                issuerUrl:
+                  type: string
+                  format: uri
+                clientId:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                clientSecretRef:
+                  type: string
+                  pattern: ^env:[A-Za-z_][A-Za-z0-9_]*$
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                  minItems: 1
+                  default: *a2
+                allowedEmailDomains:
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                  nullable: true
+                  default: null
+                allowedGroups:
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                  nullable: true
+                  default: null
+                autoProvision:
+                  type: boolean
+                  default: false
+                enabled:
+                  type: boolean
+                  default: true
+              additionalProperties: false
+      responses:
+        "200":
+          description: The updated provider
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - provider
+                properties:
+                  provider:
+                    $ref: "#/components/schemas/OidcProvider"
+        "400":
+          description: Malformed body or no field to change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: adminDeleteOidcProvider
+      summary: Delete an OIDC provider
+      description: Admin only. Refused with `provider_in_use` while any identity is
+        linked to this provider, unless `?force=true`, which unlinks every
+        affected identity first and refuses the whole delete
+        (`auth_method_required`) if that would leave any user with no sign-in
+        method.
+      parameters:
+        - *a1
+        - name: force
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Linked identities exist; retry with force
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Force-deleting would leave a user with no sign-in method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/invitations:
     post:
       operationId: adminCreateInvitation
@@ -873,7 +1190,7 @@ paths:
       description: Admin only. Adds last sign-in, linked identities, and the active
         API-token count. No fuel entry data is ever included (INV-9).
       parameters:
-        - &a1
+        - &a3
           name: id
           in: path
           required: true
@@ -916,7 +1233,7 @@ paths:
         Cascades vehicles, entries, tokens, sessions, identities. Refused for
         the last active admin (INV-6).
       parameters:
-        - *a1
+        - *a3
       requestBody:
         required: true
         content:
@@ -970,7 +1287,7 @@ paths:
       description: Admin only (FR-8.4). Cuts the user's sessions and API tokens
         immediately. Refused for the last active admin (INV-6).
       parameters:
-        - *a1
+        - *a3
       responses:
         "204":
           description: Done (idempotent)
@@ -1004,7 +1321,7 @@ paths:
       summary: Reactivate an account
       description: Admin only (FR-8.4).
       parameters:
-        - *a1
+        - *a3
       responses:
         "204":
           description: Done (idempotent)
@@ -1038,7 +1355,7 @@ paths:
       summary: Grant the admin role
       description: Admin only (FR-8.7).
       parameters:
-        - *a1
+        - *a3
       responses:
         "204":
           description: Done (idempotent)
@@ -1072,7 +1389,7 @@ paths:
       summary: Revoke the admin role
       description: Admin only (FR-8.7). Refused for the last active admin (INV-6).
       parameters:
-        - *a1
+        - *a3
       responses:
         "204":
           description: Done (idempotent)
@@ -1107,7 +1424,7 @@ paths:
       description: Admin only (FR-8.5). Issues a reset link. The link is returned in
         the response when email is not configured (R-2 interim).
       parameters:
-        - *a1
+        - *a3
       responses:
         "200":
           description: Reset issued
@@ -1183,6 +1500,7 @@ components:
             - odometer_decrease
             - last_admin
             - auth_method_required
+            - provider_in_use
             - rate_limited
             - internal_error
         message:
@@ -1302,6 +1620,64 @@ components:
             - integer
             - "null"
           minimum: 60
+    OidcProvider:
+      type: object
+      required:
+        - id
+        - key
+        - displayName
+        - issuerUrl
+        - clientId
+        - secretConfigured
+        - scopes
+        - allowedEmailDomains
+        - allowedGroups
+        - autoProvision
+        - enabled
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        displayName:
+          type: string
+        issuerUrl:
+          type: string
+          format: uri
+        clientId:
+          type: string
+        secretConfigured:
+          type: boolean
+          const: true
+          description: The client secret is write-only and never returned
+        scopes:
+          type: array
+          items:
+            type: string
+        allowedEmailDomains:
+          type:
+            - array
+            - "null"
+          items:
+            type: string
+        allowedGroups:
+          type:
+            - array
+            - "null"
+          items:
+            type: string
+        autoProvision:
+          type: boolean
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     AdminUserListItem:
       type: object
       required:
