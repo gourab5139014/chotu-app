@@ -2,8 +2,13 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 
 import { CURRENT_SCHEMA_VERSION } from "../db/schema/version";
 import { ERROR_STATUS } from "../domain/errors";
-import { AdminCreateUserBody, AdminDeleteUserBody } from "../routes/admin";
+import {
+  AdminCreateInvitationBody,
+  AdminCreateUserBody,
+  AdminDeleteUserBody,
+} from "../routes/admin";
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
+import { InvitationAcceptBody } from "../routes/invitations";
 import { ProfileUpdateBody } from "../routes/profile";
 import { TokenCreateBody } from "../routes/tokens";
 
@@ -300,6 +305,66 @@ export function buildOpenApiDocument(): Json {
             "204": emptyResponse("Revoked (or already revoked)"),
             "401": errorResponse("Not authenticated"),
             "404": errorResponse("No such token for this user"),
+          },
+        },
+      },
+      "/admin/invitations": {
+        post: {
+          operationId: "adminCreateInvitation",
+          summary: "Create a single-use invitation",
+          description:
+            "Admin only (FR-3.2). The plaintext invitation token is returned " +
+            "once and then only stored hashed. Default expiry is 7 days.",
+          requestBody: jsonBody(bodySchema(AdminCreateInvitationBody)),
+          responses: {
+            "201": jsonResponse("The invitation", {
+              type: "object",
+              required: ["invitation", "invitationToken", "note"],
+              properties: {
+                invitation: {
+                  type: "object",
+                  required: ["id", "email", "invitedRole", "expiresAt"],
+                  properties: {
+                    id: { type: "string" },
+                    email: { type: "string", format: "email" },
+                    invitedRole: { type: "string", enum: ["user", "admin"] },
+                    expiresAt: { type: "string", format: "date-time" },
+                  },
+                },
+                invitationToken: { type: "string" },
+                note: { type: "string" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "409": errorResponse("Email already registered"),
+          },
+        },
+      },
+      "/invitations/accept": {
+        post: {
+          operationId: "acceptInvitation",
+          summary: "Accept an invitation and create the account",
+          description:
+            "Unauthenticated. `token` is the plaintext invitation link. An " +
+            "expired, unknown, or already-used invitation returns the same " +
+            "`invitation_consumed` code (FR-3.3, FR-3.4).",
+          security: [],
+          requestBody: jsonBody(bodySchema(InvitationAcceptBody)),
+          responses: {
+            "201": jsonResponse("The new account", {
+              type: "object",
+              required: ["user"],
+              properties: {
+                user: { $ref: "#/components/schemas/PublicUser" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "409": errorResponse(
+              "Expired, unknown, or already-used invitation; or email " +
+                "already registered",
+            ),
           },
         },
       },

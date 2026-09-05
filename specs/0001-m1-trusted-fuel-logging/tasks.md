@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T6a.1
-- **Next task:** T6a.2
+- **Last completed task:** T6a.2
+- **Next task:** T6a.3
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -213,7 +213,7 @@ pause with almost no rework.
 
 - [x] **T6a.1** `invitation` table + `InvitationRepo` (both dialects).
   *done when:* `drizzle-kit check` green; repo tests pass.
-- [ ] **T6a.2** `POST /admin/invitations` (email, invited role, expiry → single
+- [x] **T6a.2** `POST /admin/invitations` (email, invited role, expiry → single
   use link) and `POST /invitations/accept` (set display name + password,
   consume) — FR-3.2, FR-3.3, FR-3.4.
   *done when:* accept creates the user; an expired / reused / unknown token is

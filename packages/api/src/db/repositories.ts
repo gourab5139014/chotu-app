@@ -525,6 +525,44 @@ export function issueUserTokenInTx(
 }
 
 /**
+ * Issue an invitation, clearing a prior unaccepted one for the same email
+ * (mirrors `issueUserTokenInTx`).
+ */
+export function issueInvitationInTx(
+  tx: Tx,
+  row: InvitationRow,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const clearWhere = and(
+    sql`lower(${s.invitation.email}) = lower(${row.email})`,
+    isNull(s.invitation.acceptedAt),
+  );
+  if (tx.dialect === "postgres") {
+    return db
+      .delete(s.invitation)
+      .where(clearWhere)
+      .then(() =>
+        db.insert(s.invitation).values(mappers.invitation.toRow(row, a)),
+      )
+      .then(() => undefined);
+  }
+  db.delete(s.invitation).where(clearWhere).run();
+  db.insert(s.invitation).values(mappers.invitation.toRow(row, a)).run();
+}
+
+/** Mark an invitation accepted by the given user. */
+export function consumeInvitationInTx(
+  tx: Tx,
+  id: string,
+  acceptedUserId: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.invitation.toRow({ acceptedAt: at, acceptedUserId }, a);
+  return settle(tx, db.update(s.invitation).set(values).where(eq(s.invitation.id, id)));
+}
+
+/**
  * INV-6 / FR-7.4 guard. Throw `last_admin` when the mutation would remove the
  * deployment's last active admin. Call it as the first `runTxSteps` step, with
  * `{ settings: true }` so the count is serialised.

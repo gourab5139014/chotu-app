@@ -8,6 +8,7 @@ import {
   deleteUserInTx,
   guardLastAdminInTx,
   insertUserInTx,
+  issueInvitationInTx,
   issueUserTokenInTx,
   revokeUserApiTokensInTx,
   revokeUserSessionsInTx,
@@ -22,11 +23,13 @@ import { parseJson } from "../http/validate";
 import { protectAdmin } from "../middleware/admin";
 import { clientIp } from "../middleware/rate-limit";
 import type { Tx } from "../db/uow";
-import type { UserRow } from "../db/schema/types";
+import type { InvitationRow, UserRow } from "../db/schema/types";
 
 type TxStep = (tx: Tx) => unknown;
 
 const LINK_TTL_MS = 1000 * 60 * 60 * 24;
+const INVITATION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const MAX_INVITATION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 /**
  * Admin read + mutation surface (FR-8). Accounts, roles, status, and security
@@ -61,6 +64,17 @@ export const AdminDeleteUserBody = z.object({
   confirmEmail: z.string().email(),
 });
 
+export const AdminCreateInvitationBody = z.object({
+  email: z.string().email(),
+  invitedRole: z.enum(["user", "admin"]).default("user"),
+  expiresInSeconds: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_INVITATION_TTL_SECONDS)
+    .optional(),
+});
+
 export function adminRoutes(deps: AppDeps): Hono<AppHono> {
   const r = new Hono<AppHono>();
   r.use("*", ...protectAdmin(deps));
@@ -71,6 +85,61 @@ export function adminRoutes(deps: AppDeps): Hono<AppHono> {
   const auditActor = (c: Context<AppHono>, actorId: string) => ({
     actorUserId: actorId,
     ip: clientIp(c, deps.env.TRUSTED_PROXY),
+  });
+
+  // POST /admin/invitations — a single-use link (FR-3.2).
+  r.post("/invitations", async (c) => {
+    const actor = c.get("user")!;
+    const body = await parseJson(c, AdminCreateInvitationBody);
+    const email = body.email.toLowerCase();
+
+    if ((await deps.repos.users.findByEmail(email)) != null) {
+      throw err.emailTaken();
+    }
+
+    const link = generateLinkToken();
+    const now = new Date();
+    const row: InvitationRow = {
+      id: newId(),
+      email,
+      tokenHash: hashToken(link),
+      invitedRole: body.invitedRole,
+      createdBy: actor.id,
+      expiresAt: new Date(
+        now.getTime() +
+          (body.expiresInSeconds ?? INVITATION_TTL_SECONDS) * 1000,
+      ),
+      acceptedAt: null,
+      acceptedUserId: null,
+      createdAt: now,
+    };
+
+    await runTxSteps(uow, {}, [
+      (tx) => issueInvitationInTx(tx, row),
+      (tx) =>
+        writeAuditInTx(tx, {
+          ...auditActor(c, actor.id),
+          action: "invitation.created",
+          targetType: "invitation",
+          targetId: row.id,
+          summary: `Invited ${email} as ${body.invitedRole}`,
+          metadata: { invitedRole: body.invitedRole },
+        }),
+    ]);
+
+    return c.json(
+      {
+        invitation: {
+          id: row.id,
+          email,
+          invitedRole: body.invitedRole,
+          expiresAt: row.expiresAt.toISOString(),
+        },
+        invitationToken: link,
+        note: "shown once",
+      },
+      201,
+    );
   });
 
   // GET /admin/users — every account, newest first.

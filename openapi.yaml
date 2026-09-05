@@ -379,6 +379,151 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /admin/invitations:
+    post:
+      operationId: adminCreateInvitation
+      summary: Create a single-use invitation
+      description: Admin only (FR-3.2). The plaintext invitation token is returned
+        once and then only stored hashed. Default expiry is 7 days.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                invitedRole:
+                  type: string
+                  enum:
+                    - user
+                    - admin
+                  default: user
+                expiresInSeconds:
+                  type: integer
+                  minimum: 1
+                  maximum: 2592000
+              required:
+                - email
+              additionalProperties: false
+      responses:
+        "201":
+          description: The invitation
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invitation
+                  - invitationToken
+                  - note
+                properties:
+                  invitation:
+                    type: object
+                    required:
+                      - id
+                      - email
+                      - invitedRole
+                      - expiresAt
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                        format: email
+                      invitedRole:
+                        type: string
+                        enum:
+                          - user
+                          - admin
+                      expiresAt:
+                        type: string
+                        format: date-time
+                  invitationToken:
+                    type: string
+                  note:
+                    type: string
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /invitations/accept:
+    post:
+      operationId: acceptInvitation
+      summary: Accept an invitation and create the account
+      description: Unauthenticated. `token` is the plaintext invitation link. An
+        expired, unknown, or already-used invitation returns the same
+        `invitation_consumed` code (FR-3.3, FR-3.4).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                password:
+                  type: string
+                  minLength: 8
+              required:
+                - token
+                - displayName
+                - password
+              additionalProperties: false
+      responses:
+        "201":
+          description: The new account
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    $ref: "#/components/schemas/PublicUser"
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Expired, unknown, or already-used invitation; or email already
+            registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/users:
     get:
       operationId: adminListUsers
