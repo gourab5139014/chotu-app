@@ -5,10 +5,11 @@ import * as sqliteSchema from "../../src/db/schema/sqlite";
 import type { DbHandle } from "../../src/db/index";
 
 import { clean, type CleanFixture } from "../fixtures/clean";
+import { invite, type InviteFixture } from "../fixtures/invite";
 import { lastAdmin, type LastAdminFixture } from "../fixtures/last-admin";
 
-export { clean, lastAdmin };
-export type { CleanFixture, LastAdminFixture };
+export { clean, invite, lastAdmin };
+export type { CleanFixture, InviteFixture, LastAdminFixture };
 
 /**
  * Seed a fixture into a migrated database with the full-privilege test
@@ -52,4 +53,24 @@ export async function loadLastAdmin(
     await db.insert(s.user).values(mappers.user.toRow(u, a));
   }
   return lastAdmin;
+}
+
+/** Seed the `invite` fixture: pending, expired, and accepted invitations. */
+export async function loadInvite(handle: DbHandle): Promise<InviteFixture> {
+  const db: any = handle.db;
+  const a = handle.dialect;
+  const s: typeof sqliteSchema =
+    a === "postgres"
+      ? (pgSchema as unknown as typeof sqliteSchema)
+      : sqliteSchema;
+
+  await db
+    .insert(s.deploymentSettings)
+    .values(mappers.deploymentSettings.toRow(invite.settings, a));
+  await db.insert(s.user).values(mappers.user.toRow(invite.admin, a));
+  await db.insert(s.user).values(mappers.user.toRow(invite.acceptedUser, a));
+  for (const inv of invite.invitations) {
+    await db.insert(s.invitation).values(mappers.invitation.toRow(inv, a));
+  }
+  return invite;
 }

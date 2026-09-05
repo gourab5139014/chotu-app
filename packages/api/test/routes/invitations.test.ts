@@ -7,6 +7,7 @@ import { newId } from "../../src/domain/id";
 import type { NewUser } from "../../src/db/schema/types";
 import { expectAuditDelta } from "../support/audit";
 import { makeTestApp, type TestApp } from "../support/app";
+import { loadInvite } from "../support/fixtures";
 
 function regularUser(over: Partial<NewUser> = {}): NewUser {
   return {
@@ -191,5 +192,66 @@ describe("/admin/invitations + /invitations/accept", () => {
       password: "password12345",
     });
     expect(res.status).toBe(409);
+  });
+});
+
+describe("invite fixture — T6a.3", () => {
+  let t: TestApp;
+
+  beforeEach(async () => {
+    t = makeTestApp();
+    await loadInvite(t.handle);
+  });
+  afterEach(() => t.cleanup());
+
+  it("loads a pending, an expired, and an accepted invitation", async () => {
+    const pending = await t.repos.invitations.findByHash(
+      "fixture-hash-pending",
+    );
+    expect(pending?.acceptedAt).toBeNull();
+    expect(pending!.expiresAt.getTime()).toBeGreaterThan(Date.now() - 1e15);
+
+    const expired = await t.repos.invitations.findByHash(
+      "fixture-hash-expired",
+    );
+    expect(expired?.acceptedAt).toBeNull();
+    expect(expired!.expiresAt.getTime()).toBeLessThan(Date.now());
+
+    const accepted = await t.repos.invitations.findByHash(
+      "fixture-hash-accepted",
+    );
+    expect(accepted?.acceptedAt).toBeInstanceOf(Date);
+    expect(accepted?.acceptedUserId).not.toBeNull();
+  });
+});
+
+describe("/invitations/accept rate limit — T6a.3", () => {
+  let t: TestApp;
+
+  beforeEach(() => {
+    t = makeTestApp({ RATE_LIMIT_INVITE_ACCEPT_PER_MIN_IP: "3" });
+  });
+  afterEach(() => t.cleanup());
+
+  it("a burst past the threshold returns 429 with Retry-After", async () => {
+    const attempt = () =>
+      t.app.request("/invitations/accept", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token: "no-such-token",
+          displayName: "X",
+          password: "password12345",
+        }),
+      });
+
+    const results = [];
+    for (let i = 0; i < 5; i++) {
+      results.push(await attempt());
+    }
+
+    const blocked = results.filter((r) => r.status === 429);
+    expect(blocked.length).toBeGreaterThan(0);
+    expect(blocked[0]?.headers.get("retry-after")).not.toBeNull();
   });
 });

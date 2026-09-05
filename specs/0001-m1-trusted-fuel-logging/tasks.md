@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T6a.2
-- **Next task:** T6a.3
+- **Last completed task:** T6a.3 (slice 6a complete)
+- **Next task:** T6b.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -218,7 +218,7 @@ pause with almost no rework.
   consume) — FR-3.2, FR-3.3, FR-3.4.
   *done when:* accept creates the user; an expired / reused / unknown token is
   rejected with the specific code.
-- [ ] **T6a.3** `invite` fixture (pending, expired, accepted); rate-limit
+- [x] **T6a.3** `invite` fixture (pending, expired, accepted); rate-limit
   accept.
   *done when:* fixture loads; a burst on accept returns `429`.
 
