@@ -46,6 +46,13 @@ export const envSchema = z.object({
   /** Optional overrides for the draft rate-limit thresholds (requests/window). */
   RATE_LIMIT_SIGNIN_PER_MIN_IP: z.coerce.number().int().positive().optional(),
   RATE_LIMIT_SIGNIN_PER_MIN_ACCOUNT: z.coerce.number().int().positive().optional(),
+  RATE_LIMIT_INVITE_ACCEPT_PER_MIN_IP: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional(),
+  RATE_LIMIT_REGISTER_PER_MIN_IP: z.coerce.number().int().positive().optional(),
+  RATE_LIMIT_VERIFY_PER_MIN_IP: z.coerce.number().int().positive().optional(),
 
   /** Optional SMTP. When unset, link tokens are returned in the API response. */
   EMAIL_SMTP_URL: z.string().optional(),

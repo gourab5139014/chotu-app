@@ -8,25 +8,34 @@ import {
   deleteUserInTx,
   guardLastAdminInTx,
   insertUserInTx,
+  issueInvitationInTx,
   issueUserTokenInTx,
   revokeUserApiTokensInTx,
   revokeUserSessionsInTx,
+  updateSettingsInTx,
   updateUserInTx,
   writeAuditInTx,
 } from "../db/repositories";
 import { makeUnitOfWork, runTxSteps } from "../db/uow";
 import { err } from "../domain/errors";
+import { isValidTimeZone } from "../domain/time-zone";
 import { newId } from "../domain/id";
 import type { AppDeps, AppHono } from "../http/context";
 import { parseJson } from "../http/validate";
 import { protectAdmin } from "../middleware/admin";
 import { clientIp } from "../middleware/rate-limit";
 import type { Tx } from "../db/uow";
-import type { UserRow } from "../db/schema/types";
+import type {
+  DeploymentSettingsRow,
+  InvitationRow,
+  UserRow,
+} from "../db/schema/types";
 
 type TxStep = (tx: Tx) => unknown;
 
 const LINK_TTL_MS = 1000 * 60 * 60 * 24;
+const INVITATION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const MAX_INVITATION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 /**
  * Admin read + mutation surface (FR-8). Accounts, roles, status, and security
@@ -61,6 +70,52 @@ export const AdminDeleteUserBody = z.object({
   confirmEmail: z.string().email(),
 });
 
+export const AdminCreateInvitationBody = z.object({
+  email: z.string().email(),
+  invitedRole: z.enum(["user", "admin"]).default("user"),
+  expiresInSeconds: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_INVITATION_TTL_SECONDS)
+    .optional(),
+});
+
+// FR-9.1: deployment_settings, minus default_currency_code (fixed USD in M1).
+export const AdminUpdateSettingsBody = z
+  .object({
+    deploymentName: z.string().trim().min(1).max(200),
+    registrationPolicy: z.enum(["invite_only", "open", "sso_auto"]),
+    allowedAuthMethods: z.array(z.enum(["password", "oidc"])).min(1),
+    defaultUnitSystem: z.enum(["imperial", "metric"]),
+    defaultTimeZone: z
+      .string()
+      .trim()
+      .min(1)
+      .refine(isValidTimeZone, { message: "Unknown IANA time zone" }),
+    fuelVolumePrecision: z.number().int().min(1).max(3),
+    sessionTtlSeconds: z.number().int().min(60),
+    apiTokenTtlSeconds: z.number().int().min(60).nullable(),
+  })
+  .partial()
+  .refine((b) => Object.keys(b).length > 0, {
+    message: "Provide at least one field to change",
+  });
+
+function publicSettings(s: DeploymentSettingsRow) {
+  return {
+    deploymentName: s.deploymentName,
+    registrationPolicy: s.registrationPolicy,
+    allowedAuthMethods: s.allowedAuthMethods,
+    defaultUnitSystem: s.defaultUnitSystem,
+    defaultCurrencyCode: s.defaultCurrencyCode,
+    defaultTimeZone: s.defaultTimeZone,
+    fuelVolumePrecision: s.fuelVolumePrecision,
+    sessionTtlSeconds: s.sessionTtlSeconds,
+    apiTokenTtlSeconds: s.apiTokenTtlSeconds,
+  };
+}
+
 export function adminRoutes(deps: AppDeps): Hono<AppHono> {
   const r = new Hono<AppHono>();
   r.use("*", ...protectAdmin(deps));
@@ -71,6 +126,127 @@ export function adminRoutes(deps: AppDeps): Hono<AppHono> {
   const auditActor = (c: Context<AppHono>, actorId: string) => ({
     actorUserId: actorId,
     ip: clientIp(c, deps.env.TRUSTED_PROXY),
+  });
+
+  // POST /admin/invitations — a single-use link (FR-3.2).
+  r.post("/invitations", async (c) => {
+    const actor = c.get("user")!;
+    const body = await parseJson(c, AdminCreateInvitationBody);
+    const email = body.email.toLowerCase();
+
+    if ((await deps.repos.users.findByEmail(email)) != null) {
+      throw err.emailTaken();
+    }
+
+    const link = generateLinkToken();
+    const now = new Date();
+    const row: InvitationRow = {
+      id: newId(),
+      email,
+      tokenHash: hashToken(link),
+      invitedRole: body.invitedRole,
+      createdBy: actor.id,
+      expiresAt: new Date(
+        now.getTime() +
+          (body.expiresInSeconds ?? INVITATION_TTL_SECONDS) * 1000,
+      ),
+      acceptedAt: null,
+      acceptedUserId: null,
+      createdAt: now,
+    };
+
+    await runTxSteps(uow, {}, [
+      (tx) => issueInvitationInTx(tx, row),
+      (tx) =>
+        writeAuditInTx(tx, {
+          ...auditActor(c, actor.id),
+          action: "invitation.created",
+          targetType: "invitation",
+          targetId: row.id,
+          summary: `Invited ${email} as ${body.invitedRole}`,
+          metadata: { invitedRole: body.invitedRole },
+        }),
+    ]);
+
+    return c.json(
+      {
+        invitation: {
+          id: row.id,
+          email,
+          invitedRole: body.invitedRole,
+          expiresAt: row.expiresAt.toISOString(),
+        },
+        invitationToken: link,
+        note: "shown once",
+      },
+      201,
+    );
+  });
+
+  // GET /admin/settings (FR-9.1).
+  r.get("/settings", async (c) => {
+    const current = await settings.get();
+    if (current == null) throw err.notFound("Settings not found");
+    return c.json({ settings: publicSettings(current) });
+  });
+
+  // PATCH /admin/settings (FR-9.1). FR-9.2: allowedAuthMethods must stay
+  // non-empty, and dropping "password" is refused while any user could be
+  // stranded by it.
+  r.patch("/settings", async (c) => {
+    const actor = c.get("user")!;
+    const body = await parseJson(c, AdminUpdateSettingsBody);
+    const current = await settings.get();
+    if (current == null) throw err.notFound("Settings not found");
+
+    const nextMethods = body.allowedAuthMethods ?? current.allowedAuthMethods;
+    if (!nextMethods.includes("password")) {
+      // The identity table lands in slice 7 (T7.1); until then no user can
+      // have a linked OIDC identity, so removing password would strand every
+      // account that has one. Re-check against real identities once that
+      // table exists.
+      const anyUsers = (await deps.repos.users.list()).length > 0;
+      if (anyUsers) throw err.authMethodRequired();
+    }
+
+    // exactOptionalPropertyTypes: copy only the fields the caller sent.
+    const patch: Partial<Omit<DeploymentSettingsRow, "id" | "createdAt">> = {};
+    if (body.deploymentName !== undefined) patch.deploymentName = body.deploymentName;
+    if (body.registrationPolicy !== undefined) {
+      patch.registrationPolicy = body.registrationPolicy;
+    }
+    if (body.allowedAuthMethods !== undefined) {
+      patch.allowedAuthMethods = body.allowedAuthMethods;
+    }
+    if (body.defaultUnitSystem !== undefined) {
+      patch.defaultUnitSystem = body.defaultUnitSystem;
+    }
+    if (body.defaultTimeZone !== undefined) patch.defaultTimeZone = body.defaultTimeZone;
+    if (body.fuelVolumePrecision !== undefined) {
+      patch.fuelVolumePrecision = body.fuelVolumePrecision;
+    }
+    if (body.sessionTtlSeconds !== undefined) {
+      patch.sessionTtlSeconds = body.sessionTtlSeconds;
+    }
+    if (body.apiTokenTtlSeconds !== undefined) {
+      patch.apiTokenTtlSeconds = body.apiTokenTtlSeconds;
+    }
+
+    await runTxSteps(uow, {}, [
+      (tx) => updateSettingsInTx(tx, patch),
+      (tx) =>
+        writeAuditInTx(tx, {
+          ...auditActor(c, actor.id),
+          action: "settings.updated",
+          targetType: "deployment_settings",
+          targetId: "singleton",
+          summary: "Updated deployment settings",
+          metadata: { fields: Object.keys(patch) },
+        }),
+    ]);
+
+    const updated = await settings.get();
+    return c.json({ settings: publicSettings(updated!) });
   });
 
   // GET /admin/users — every account, newest first.
@@ -125,7 +301,9 @@ export function adminRoutes(deps: AppDeps): Hono<AppHono> {
     const row: UserRow = {
       id: newId(),
       email: body.email,
-      emailVerifiedAt: null,
+      // An admin vouches for this email directly (FR-3.5 gates
+      // self-registration only, not admin-created accounts).
+      emailVerifiedAt: now,
       displayName: body.displayName,
       role: body.role,
       status: "active",

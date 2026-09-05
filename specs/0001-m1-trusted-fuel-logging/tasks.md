@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T5c.5 (slice 5c complete; T5c.1-5 built together, one commit)
-- **Next task:** T6a.1
+- **Last completed task:** T6b.2 (slice 6b complete)
+- **Next task:** T7.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -211,24 +211,24 @@ pause with almost no rework.
 
 ## Slice 6a — Invitations
 
-- [ ] **T6a.1** `invitation` table + `InvitationRepo` (both dialects).
+- [x] **T6a.1** `invitation` table + `InvitationRepo` (both dialects).
   *done when:* `drizzle-kit check` green; repo tests pass.
-- [ ] **T6a.2** `POST /admin/invitations` (email, invited role, expiry → single
+- [x] **T6a.2** `POST /admin/invitations` (email, invited role, expiry → single
   use link) and `POST /invitations/accept` (set display name + password,
   consume) — FR-3.2, FR-3.3, FR-3.4.
   *done when:* accept creates the user; an expired / reused / unknown token is
   rejected with the specific code.
-- [ ] **T6a.3** `invite` fixture (pending, expired, accepted); rate-limit
+- [x] **T6a.3** `invite` fixture (pending, expired, accepted); rate-limit
   accept.
   *done when:* fixture loads; a burst on accept returns `429`.
 
 ## Slice 6b — Registration policy + verification
 
-- [ ] **T6b.1** Policy switch on `deployment_settings.registration_policy`
+- [x] **T6b.1** Policy switch on `deployment_settings.registration_policy`
   (FR-3.1) via `PATCH /admin/settings`; FR-9.2 guard on removing `password`.
   *done when:* removing `password` while a user has no identity is rejected
   `auth_method_required`.
-- [ ] **T6b.2** `open` self-register: `POST /register` creates an unverified
+- [x] **T6b.2** `open` self-register: `POST /register` creates an unverified
   user + a `user_token` `verify`; `POST /verify` consumes it and sets
   `email_verified_at`; unverified users cannot sign in (FR-3.5).
   *done when:* the flow works; the verify link is returned when `EMAIL_*` is

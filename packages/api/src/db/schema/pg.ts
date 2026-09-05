@@ -146,6 +146,33 @@ export const session = pgTable(
   (t) => [uniqueIndex("session_hash_uq").on(t.tokenHash)],
 );
 
+export const invitation = pgTable(
+  "invitation",
+  {
+    id: f.uuidPk().pg,
+    email: f.text("email").pg.notNull(),
+    tokenHash: f.text("token_hash").pg.notNull(),
+    invitedRole: f.text("invited_role").pg.notNull(),
+    createdBy: f
+      .uuidRef("created_by")
+      .pg.notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    expiresAt: f.timestamptz("expires_at").pg.notNull(),
+    acceptedAt: f.timestamptz("accepted_at").pg,
+    acceptedUserId: f
+      .uuidRef("accepted_user_id")
+      .pg.references(() => user.id, { onDelete: "set null" }),
+    createdAt: f.timestamptz("created_at").pg.notNull(),
+  },
+  (t) => [
+    uniqueIndex("invitation_token_hash_uq").on(t.tokenHash),
+    uniqueIndex("invitation_pending_email_uq")
+      .on(sql`lower(${t.email})`)
+      .where(sql`${t.acceptedAt} is null`),
+    check("invitation_role_ck", sql`${t.invitedRole} in ('user', 'admin')`),
+  ],
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {

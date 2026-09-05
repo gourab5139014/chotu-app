@@ -13,6 +13,7 @@ import type {
   ApiTokenRow,
   AuditLogRow,
   DeploymentSettingsRow,
+  InvitationRow,
   SchemaMetaRow,
   SessionRow,
   UserRow,
@@ -94,6 +95,10 @@ const SESSION: TableMap = {
   safeInts: [],
 };
 const AUDIT_LOG: TableMap = { instants: ["createdAt"], safeInts: [] };
+const INVITATION: TableMap = {
+  instants: ["expiresAt", "acceptedAt", "createdAt"],
+  safeInts: [],
+};
 
 export const mappers = {
   schemaMeta: {
@@ -126,6 +131,11 @@ export const mappers = {
   auditLog: {
     toDomain: (r: Raw) => rowToDomain<AuditLogRow>(r, AUDIT_LOG),
     toRow: (d: Partial<AuditLogRow>, a: Adapter) => domainToRow(d, AUDIT_LOG, a),
+  },
+  invitation: {
+    toDomain: (r: Raw) => rowToDomain<InvitationRow>(r, INVITATION),
+    toRow: (d: Partial<InvitationRow>, a: Adapter) =>
+      domainToRow(d, INVITATION, a),
   },
 } as const;
 

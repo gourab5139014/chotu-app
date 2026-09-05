@@ -379,6 +379,388 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /register:
+    post:
+      operationId: register
+      summary: Self-register an account
+      description: Unauthenticated. Active only while the deployment's
+        registration_policy is `open` (FR-3.5). The account cannot sign in until
+        it verifies its email with POST /verify. The verify link is returned in
+        the response when email is not configured (R-2 interim).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                password:
+                  type: string
+                  minLength: 8
+              required:
+                - email
+                - displayName
+                - password
+              additionalProperties: false
+      responses:
+        "201":
+          description: The new, unverified account
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    $ref: "#/components/schemas/PublicUser"
+                  verifyToken:
+                    type: string
+                    description: Present when email is not configured
+                  note:
+                    type: string
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Self-registration is not enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limited; see Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /verify:
+    post:
+      operationId: verifyEmail
+      summary: Consume a verification link
+      description: Unauthenticated. Sets `emailVerifiedAt` so the account can sign in.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+              required:
+                - token
+              additionalProperties: false
+      responses:
+        "200":
+          description: The now-verified account
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    $ref: "#/components/schemas/PublicUser"
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Invalid, expired, or already-used link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limited; see Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/invitations:
+    post:
+      operationId: adminCreateInvitation
+      summary: Create a single-use invitation
+      description: Admin only (FR-3.2). The plaintext invitation token is returned
+        once and then only stored hashed. Default expiry is 7 days.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                invitedRole:
+                  type: string
+                  enum:
+                    - user
+                    - admin
+                  default: user
+                expiresInSeconds:
+                  type: integer
+                  minimum: 1
+                  maximum: 2592000
+              required:
+                - email
+              additionalProperties: false
+      responses:
+        "201":
+          description: The invitation
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invitation
+                  - invitationToken
+                  - note
+                properties:
+                  invitation:
+                    type: object
+                    required:
+                      - id
+                      - email
+                      - invitedRole
+                      - expiresAt
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                        format: email
+                      invitedRole:
+                        type: string
+                        enum:
+                          - user
+                          - admin
+                      expiresAt:
+                        type: string
+                        format: date-time
+                  invitationToken:
+                    type: string
+                  note:
+                    type: string
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /invitations/accept:
+    post:
+      operationId: acceptInvitation
+      summary: Accept an invitation and create the account
+      description: Unauthenticated. `token` is the plaintext invitation link. An
+        expired, unknown, or already-used invitation returns the same
+        `invitation_consumed` code (FR-3.3, FR-3.4).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                password:
+                  type: string
+                  minLength: 8
+              required:
+                - token
+                - displayName
+                - password
+              additionalProperties: false
+      responses:
+        "201":
+          description: The new account
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    $ref: "#/components/schemas/PublicUser"
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Expired, unknown, or already-used invitation; or email already
+            registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/settings:
+    get:
+      operationId: adminGetSettings
+      summary: Read the deployment settings
+      description: Admin only (FR-9.1).
+      responses:
+        "200":
+          description: The current settings
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - settings
+                properties:
+                  settings:
+                    $ref: "#/components/schemas/DeploymentSettings"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: adminUpdateSettings
+      summary: Update the deployment settings
+      description: Admin only (FR-9.1). `allowedAuthMethods` must stay non-empty;
+        dropping `password` is refused while any user could be stranded by it
+        (FR-9.2). `defaultCurrencyCode` is fixed to USD in M1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deploymentName:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                registrationPolicy:
+                  type: string
+                  enum:
+                    - invite_only
+                    - open
+                    - sso_auto
+                allowedAuthMethods:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - password
+                      - oidc
+                  minItems: 1
+                defaultUnitSystem:
+                  type: string
+                  enum:
+                    - imperial
+                    - metric
+                defaultTimeZone:
+                  type: string
+                  minLength: 1
+                fuelVolumePrecision:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+                sessionTtlSeconds:
+                  type: integer
+                  minimum: 60
+                apiTokenTtlSeconds:
+                  type: integer
+                  minimum: 60
+                  nullable: true
+              additionalProperties: false
+      responses:
+        "200":
+          description: The updated settings
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - settings
+                properties:
+                  settings:
+                    $ref: "#/components/schemas/DeploymentSettings"
+        "400":
+          description: Malformed body or no field to change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Removing password would leave a user with no sign-in method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/users:
     get:
       operationId: adminListUsers
@@ -868,6 +1250,58 @@ components:
           description: Read-only in M1
         mustChangePassword:
           type: boolean
+    DeploymentSettings:
+      type: object
+      required:
+        - deploymentName
+        - registrationPolicy
+        - allowedAuthMethods
+        - defaultUnitSystem
+        - defaultCurrencyCode
+        - defaultTimeZone
+        - fuelVolumePrecision
+        - sessionTtlSeconds
+        - apiTokenTtlSeconds
+      properties:
+        deploymentName:
+          type: string
+        registrationPolicy:
+          type: string
+          enum:
+            - invite_only
+            - open
+            - sso_auto
+        allowedAuthMethods:
+          type: array
+          items:
+            type: string
+            enum:
+              - password
+              - oidc
+        defaultUnitSystem:
+          type: string
+          enum:
+            - imperial
+            - metric
+        defaultCurrencyCode:
+          type: string
+          const: USD
+          description: Read-only in M1
+        defaultTimeZone:
+          type: string
+          description: IANA time zone
+        fuelVolumePrecision:
+          type: integer
+          minimum: 1
+          maximum: 3
+        sessionTtlSeconds:
+          type: integer
+          minimum: 60
+        apiTokenTtlSeconds:
+          type:
+            - integer
+            - "null"
+          minimum: 60
     AdminUserListItem:
       type: object
       required:

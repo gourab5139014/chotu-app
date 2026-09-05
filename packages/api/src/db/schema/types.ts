@@ -90,6 +90,19 @@ export interface SessionRow {
   ip: string | null;
 }
 
+export interface InvitationRow {
+  id: string;
+  /** Lower-cased. */
+  email: string;
+  tokenHash: string;
+  invitedRole: UserRole;
+  createdBy: string;
+  expiresAt: Date;
+  acceptedAt: Date | null;
+  acceptedUserId: string | null;
+  createdAt: Date;
+}
+
 export interface AuditLogRow {
   id: string;
   /** The admin or user who acted. Null for a system action. */
@@ -119,3 +132,7 @@ export type NewSession = Omit<SessionRow, "createdAt" | "lastSeenAt">;
 export type NewAuditLog = Omit<AuditLogRow, "id" | "createdAt"> & {
   id?: string;
 };
+export type NewInvitation = Omit<
+  InvitationRow,
+  "createdAt" | "acceptedAt" | "acceptedUserId"
+>;

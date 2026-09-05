@@ -43,7 +43,16 @@ export async function signIn(
   const phc = user?.passwordHash ?? (await dummyPasswordHash());
   const passwordOk = await verifyPassword(phc, input.password);
 
-  if (user == null || user.status !== "active" || user.passwordHash == null || !passwordOk) {
+  if (
+    user == null ||
+    user.status !== "active" ||
+    user.passwordHash == null ||
+    user.emailVerifiedAt == null ||
+    !passwordOk
+  ) {
+    // FR-3.5: an open-registration account cannot sign in until verified.
+    // Folded into the one generic failure so a caller cannot tell an
+    // unverified account from a wrong password (FR-2.3).
     throw generic;
   }
 

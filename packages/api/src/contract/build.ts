@@ -2,9 +2,16 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 
 import { CURRENT_SCHEMA_VERSION } from "../db/schema/version";
 import { ERROR_STATUS } from "../domain/errors";
-import { AdminCreateUserBody, AdminDeleteUserBody } from "../routes/admin";
+import {
+  AdminCreateInvitationBody,
+  AdminCreateUserBody,
+  AdminDeleteUserBody,
+  AdminUpdateSettingsBody,
+} from "../routes/admin";
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
+import { InvitationAcceptBody } from "../routes/invitations";
 import { ProfileUpdateBody } from "../routes/profile";
+import { RegisterBody, VerifyBody } from "../routes/register";
 import { TokenCreateBody } from "../routes/tokens";
 
 /**
@@ -303,6 +310,163 @@ export function buildOpenApiDocument(): Json {
           },
         },
       },
+      "/register": {
+        post: {
+          operationId: "register",
+          summary: "Self-register an account",
+          description:
+            "Unauthenticated. Active only while the deployment's " +
+            "registration_policy is `open` (FR-3.5). The account cannot sign " +
+            "in until it verifies its email with POST /verify. The verify " +
+            "link is returned in the response when email is not configured " +
+            "(R-2 interim).",
+          security: [],
+          requestBody: jsonBody(bodySchema(RegisterBody)),
+          responses: {
+            "201": jsonResponse("The new, unverified account", {
+              type: "object",
+              required: ["user"],
+              properties: {
+                user: { $ref: "#/components/schemas/PublicUser" },
+                verifyToken: {
+                  type: "string",
+                  description: "Present when email is not configured",
+                },
+                note: { type: "string" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "403": errorResponse("Self-registration is not enabled"),
+            "409": errorResponse("Email already registered"),
+            "429": errorResponse("Rate limited; see Retry-After"),
+          },
+        },
+      },
+      "/verify": {
+        post: {
+          operationId: "verifyEmail",
+          summary: "Consume a verification link",
+          description:
+            "Unauthenticated. Sets `emailVerifiedAt` so the account can sign " +
+            "in.",
+          security: [],
+          requestBody: jsonBody(bodySchema(VerifyBody)),
+          responses: {
+            "200": jsonResponse("The now-verified account", {
+              type: "object",
+              required: ["user"],
+              properties: {
+                user: { $ref: "#/components/schemas/PublicUser" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "404": errorResponse("Invalid, expired, or already-used link"),
+            "429": errorResponse("Rate limited; see Retry-After"),
+          },
+        },
+      },
+      "/admin/invitations": {
+        post: {
+          operationId: "adminCreateInvitation",
+          summary: "Create a single-use invitation",
+          description:
+            "Admin only (FR-3.2). The plaintext invitation token is returned " +
+            "once and then only stored hashed. Default expiry is 7 days.",
+          requestBody: jsonBody(bodySchema(AdminCreateInvitationBody)),
+          responses: {
+            "201": jsonResponse("The invitation", {
+              type: "object",
+              required: ["invitation", "invitationToken", "note"],
+              properties: {
+                invitation: {
+                  type: "object",
+                  required: ["id", "email", "invitedRole", "expiresAt"],
+                  properties: {
+                    id: { type: "string" },
+                    email: { type: "string", format: "email" },
+                    invitedRole: { type: "string", enum: ["user", "admin"] },
+                    expiresAt: { type: "string", format: "date-time" },
+                  },
+                },
+                invitationToken: { type: "string" },
+                note: { type: "string" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "409": errorResponse("Email already registered"),
+          },
+        },
+      },
+      "/invitations/accept": {
+        post: {
+          operationId: "acceptInvitation",
+          summary: "Accept an invitation and create the account",
+          description:
+            "Unauthenticated. `token` is the plaintext invitation link. An " +
+            "expired, unknown, or already-used invitation returns the same " +
+            "`invitation_consumed` code (FR-3.3, FR-3.4).",
+          security: [],
+          requestBody: jsonBody(bodySchema(InvitationAcceptBody)),
+          responses: {
+            "201": jsonResponse("The new account", {
+              type: "object",
+              required: ["user"],
+              properties: {
+                user: { $ref: "#/components/schemas/PublicUser" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "409": errorResponse(
+              "Expired, unknown, or already-used invitation; or email " +
+                "already registered",
+            ),
+          },
+        },
+      },
+      "/admin/settings": {
+        get: {
+          operationId: "adminGetSettings",
+          summary: "Read the deployment settings",
+          description: "Admin only (FR-9.1).",
+          responses: {
+            "200": jsonResponse("The current settings", {
+              type: "object",
+              required: ["settings"],
+              properties: {
+                settings: { $ref: "#/components/schemas/DeploymentSettings" },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+          },
+        },
+        patch: {
+          operationId: "adminUpdateSettings",
+          summary: "Update the deployment settings",
+          description:
+            "Admin only (FR-9.1). `allowedAuthMethods` must stay non-empty; " +
+            "dropping `password` is refused while any user could be stranded " +
+            "by it (FR-9.2). `defaultCurrencyCode` is fixed to USD in M1.",
+          requestBody: jsonBody(bodySchema(AdminUpdateSettingsBody)),
+          responses: {
+            "200": jsonResponse("The updated settings", {
+              type: "object",
+              required: ["settings"],
+              properties: {
+                settings: { $ref: "#/components/schemas/DeploymentSettings" },
+              },
+            }),
+            "400": errorResponse("Malformed body or no field to change"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "422": errorResponse(
+              "Removing password would leave a user with no sign-in method",
+            ),
+          },
+        },
+      },
       "/admin/users": {
         get: {
           operationId: "adminListUsers",
@@ -493,6 +657,41 @@ export function buildOpenApiDocument(): Json {
               description: "Read-only in M1",
             },
             mustChangePassword: { type: "boolean" },
+          },
+        },
+        DeploymentSettings: {
+          type: "object",
+          required: [
+            "deploymentName",
+            "registrationPolicy",
+            "allowedAuthMethods",
+            "defaultUnitSystem",
+            "defaultCurrencyCode",
+            "defaultTimeZone",
+            "fuelVolumePrecision",
+            "sessionTtlSeconds",
+            "apiTokenTtlSeconds",
+          ],
+          properties: {
+            deploymentName: { type: "string" },
+            registrationPolicy: {
+              type: "string",
+              enum: ["invite_only", "open", "sso_auto"],
+            },
+            allowedAuthMethods: {
+              type: "array",
+              items: { type: "string", enum: ["password", "oidc"] },
+            },
+            defaultUnitSystem: { type: "string", enum: ["imperial", "metric"] },
+            defaultCurrencyCode: {
+              type: "string",
+              const: "USD",
+              description: "Read-only in M1",
+            },
+            defaultTimeZone: { type: "string", description: "IANA time zone" },
+            fuelVolumePrecision: { type: "integer", minimum: 1, maximum: 3 },
+            sessionTtlSeconds: { type: "integer", minimum: 60 },
+            apiTokenTtlSeconds: { type: ["integer", "null"], minimum: 60 },
           },
         },
         AdminUserListItem: {

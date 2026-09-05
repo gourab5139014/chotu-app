@@ -10,20 +10,11 @@ import {
 } from "../db/repositories";
 import { makeUnitOfWork } from "../db/uow";
 import { err } from "../domain/errors";
+import { isValidTimeZone } from "../domain/time-zone";
 import type { AppDeps, AppHono } from "../http/context";
 import { parseJson } from "../http/validate";
 import { protect } from "../middleware/protect";
 import type { UserRow } from "../db/schema/types";
-
-/** True when `tz` is an IANA zone the runtime accepts. */
-function isValidTimeZone(tz: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export const ProfileUpdateBody = z
   .object({

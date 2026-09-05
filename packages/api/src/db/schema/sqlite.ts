@@ -152,6 +152,33 @@ export const session = sqliteTable(
   (t) => [uniqueIndex("session_hash_uq").on(t.tokenHash)],
 );
 
+export const invitation = sqliteTable(
+  "invitation",
+  {
+    id: f.uuidPk().sqlite,
+    email: f.text("email").sqlite.notNull(),
+    tokenHash: f.text("token_hash").sqlite.notNull(),
+    invitedRole: f.text("invited_role").sqlite.notNull(),
+    createdBy: f
+      .uuidRef("created_by")
+      .sqlite.notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    expiresAt: f.timestamptz("expires_at").sqlite.notNull(),
+    acceptedAt: f.timestamptz("accepted_at").sqlite,
+    acceptedUserId: f
+      .uuidRef("accepted_user_id")
+      .sqlite.references(() => user.id, { onDelete: "set null" }),
+    createdAt: f.timestamptz("created_at").sqlite.notNull(),
+  },
+  (t) => [
+    uniqueIndex("invitation_token_hash_uq").on(t.tokenHash),
+    uniqueIndex("invitation_pending_email_uq")
+      .on(sql`lower(${t.email})`)
+      .where(sql`${t.acceptedAt} is null`),
+    check("invitation_role_ck", sql`${t.invitedRole} in ('user', 'admin')`),
+  ],
+);
+
 export const auditLog = sqliteTable(
   "audit_log",
   {

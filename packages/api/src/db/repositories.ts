@@ -11,8 +11,10 @@ import type {
   ApiTokenRow,
   AuditLogRow,
   DeploymentSettingsRow,
+  InvitationRow,
   NewApiToken,
   NewAuditLog,
+  NewInvitation,
   NewSession,
   NewUser,
   NewUserToken,
@@ -311,6 +313,46 @@ export function makeRepos(handle: DbHandle): Repos {
         return Number(rows[0]?.n ?? 0);
       },
     },
+
+    invitations: {
+      async issue(invitation: NewInvitation) {
+        await db
+          .delete(s.invitation)
+          .where(
+            and(
+              sql`lower(${s.invitation.email}) = lower(${invitation.email})`,
+              isNull(s.invitation.acceptedAt),
+            ),
+          );
+        const row: InvitationRow = {
+          ...invitation,
+          acceptedAt: null,
+          acceptedUserId: null,
+          createdAt: now(),
+        };
+        await db.insert(s.invitation).values(mappers.invitation.toRow(row, a));
+        return row;
+      },
+      async findByHash(tokenHash) {
+        const rows = await db
+          .select()
+          .from(s.invitation)
+          .where(eq(s.invitation.tokenHash, tokenHash))
+          .limit(1);
+        return first<InvitationRow>(rows, mappers.invitation.toDomain);
+      },
+      async consume(id, acceptedUserId, at) {
+        await db
+          .update(s.invitation)
+          .set(
+            mappers.invitation.toRow(
+              { acceptedAt: at, acceptedUserId },
+              a,
+            ),
+          )
+          .where(eq(s.invitation.id, id));
+      },
+    },
   };
 }
 
@@ -480,6 +522,79 @@ export function issueUserTokenInTx(
   }
   db.delete(s.userToken).where(clearWhere).run();
   db.insert(s.userToken).values(mappers.userToken.toRow(row, a)).run();
+}
+
+/** Mark a `user_token` used. */
+export function consumeUserTokenInTx(
+  tx: Tx,
+  id: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const value = a === "sqlite" ? at.toISOString() : at;
+  return settle(
+    tx,
+    db.update(s.userToken).set({ usedAt: value }).where(eq(s.userToken.id, id)),
+  );
+}
+
+/** Patch the `deployment_settings` singleton. `updatedAt` is set here. */
+export function updateSettingsInTx(
+  tx: Tx,
+  patch: Partial<Omit<DeploymentSettingsRow, "id" | "createdAt">>,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.deploymentSettings.toRow(
+    { ...patch, updatedAt: new Date() } as DeploymentSettingsRow,
+    a,
+  );
+  delete (values as any).id;
+  delete (values as any).createdAt;
+  return settle(
+    tx,
+    db
+      .update(s.deploymentSettings)
+      .set(values)
+      .where(eq(s.deploymentSettings.id, SINGLETON)),
+  );
+}
+
+/**
+ * Issue an invitation, clearing a prior unaccepted one for the same email
+ * (mirrors `issueUserTokenInTx`).
+ */
+export function issueInvitationInTx(
+  tx: Tx,
+  row: InvitationRow,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const clearWhere = and(
+    sql`lower(${s.invitation.email}) = lower(${row.email})`,
+    isNull(s.invitation.acceptedAt),
+  );
+  if (tx.dialect === "postgres") {
+    return db
+      .delete(s.invitation)
+      .where(clearWhere)
+      .then(() =>
+        db.insert(s.invitation).values(mappers.invitation.toRow(row, a)),
+      )
+      .then(() => undefined);
+  }
+  db.delete(s.invitation).where(clearWhere).run();
+  db.insert(s.invitation).values(mappers.invitation.toRow(row, a)).run();
+}
+
+/** Mark an invitation accepted by the given user. */
+export function consumeInvitationInTx(
+  tx: Tx,
+  id: string,
+  acceptedUserId: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.invitation.toRow({ acceptedAt: at, acceptedUserId }, a);
+  return settle(tx, db.update(s.invitation).set(values).where(eq(s.invitation.id, id)));
 }
 
 /**
