@@ -10,8 +10,10 @@ import type {
   ApiTokenRow,
   AuditLogRow,
   DeploymentSettingsRow,
+  InvitationRow,
   NewApiToken,
   NewAuditLog,
+  NewInvitation,
   NewSession,
   NewUser,
   NewUserToken,
@@ -73,6 +75,17 @@ export interface SessionRepo {
   latestActivityForUser(userId: string): Promise<Date | null>;
 }
 
+export interface InvitationRepo {
+  /**
+   * Create a single-use invitation, first clearing any unaccepted invitation
+   * for the same email (data-model: one pending invite per email at a time).
+   */
+  issue(invitation: NewInvitation): Promise<InvitationRow>;
+  findByHash(tokenHash: string): Promise<InvitationRow | null>;
+  /** Mark the invitation accepted by the given user. */
+  consume(id: string, acceptedUserId: string, at: Date): Promise<void>;
+}
+
 export interface AuditRepo {
   /**
    * Append one audit row on the outer connection. When the row must commit or
@@ -97,4 +110,5 @@ export interface Repos {
   readonly apiTokens: ApiTokenRepo;
   readonly sessions: SessionRepo;
   readonly audit: AuditRepo;
+  readonly invitations: InvitationRepo;
 }

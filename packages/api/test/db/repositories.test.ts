@@ -241,4 +241,89 @@ describeEachAdapter("repositories", (ctx) => {
       expect(await sessions.findByHash("chs_old")).toBeNull();
     });
   });
+
+  describe("invitations", () => {
+    let adminId: string;
+    beforeEach(async () => {
+      adminId = (await ctx().repos.users.create(newUser({ role: "admin" })))
+        .id;
+    });
+
+    it("issue / findByHash / consume", async () => {
+      const { invitations } = ctx().repos;
+      const row = await invitations.issue({
+        id: randomUUID(),
+        email: "invitee@example.com",
+        tokenHash: "inv_a",
+        invitedRole: "user",
+        createdBy: adminId,
+        expiresAt: new Date(Date.now() + 3600_000),
+      });
+      expect(row.acceptedAt).toBeNull();
+
+      const found = await invitations.findByHash("inv_a");
+      expect(found?.email).toBe("invitee@example.com");
+      expect(found?.invitedRole).toBe("user");
+
+      const accepted = await ctx().repos.users.create(newUser());
+      await invitations.consume(row.id, accepted.id, new Date());
+      const consumed = await invitations.findByHash("inv_a");
+      expect(consumed?.acceptedAt).toBeInstanceOf(Date);
+      expect(consumed?.acceptedUserId).toBe(accepted.id);
+    });
+
+    it("issue replaces a prior unaccepted invitation for the same email", async () => {
+      const { invitations } = ctx().repos;
+      await invitations.issue({
+        id: randomUUID(),
+        email: "Repeat@Example.com",
+        tokenHash: "inv_first",
+        invitedRole: "user",
+        createdBy: adminId,
+        expiresAt: new Date(Date.now() + 3600_000),
+      });
+      await invitations.issue({
+        id: randomUUID(),
+        email: "repeat@example.com",
+        tokenHash: "inv_second",
+        invitedRole: "admin",
+        createdBy: adminId,
+        expiresAt: new Date(Date.now() + 3600_000),
+      });
+
+      expect(await invitations.findByHash("inv_first")).toBeNull();
+      const second = await invitations.findByHash("inv_second");
+      expect(second?.invitedRole).toBe("admin");
+    });
+
+    it("issuing again after acceptance keeps the accepted row", async () => {
+      const { invitations } = ctx().repos;
+      const first = await invitations.issue({
+        id: randomUUID(),
+        email: "again@example.com",
+        tokenHash: "inv_done",
+        invitedRole: "user",
+        createdBy: adminId,
+        expiresAt: new Date(Date.now() + 3600_000),
+      });
+      const accepted = await ctx().repos.users.create(newUser());
+      await invitations.consume(first.id, accepted.id, new Date());
+
+      await invitations.issue({
+        id: randomUUID(),
+        email: "again@example.com",
+        tokenHash: "inv_new",
+        invitedRole: "user",
+        createdBy: adminId,
+        expiresAt: new Date(Date.now() + 3600_000),
+      });
+
+      expect((await invitations.findByHash("inv_done"))?.acceptedAt).toBeInstanceOf(
+        Date,
+      );
+      expect((await invitations.findByHash("inv_new"))?.email).toBe(
+        "again@example.com",
+      );
+    });
+  });
 });

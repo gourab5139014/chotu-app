@@ -11,8 +11,10 @@ import type {
   ApiTokenRow,
   AuditLogRow,
   DeploymentSettingsRow,
+  InvitationRow,
   NewApiToken,
   NewAuditLog,
+  NewInvitation,
   NewSession,
   NewUser,
   NewUserToken,
@@ -309,6 +311,46 @@ export function makeRepos(handle: DbHandle): Repos {
           .select({ n: sql<number>`count(*)` })
           .from(s.auditLog);
         return Number(rows[0]?.n ?? 0);
+      },
+    },
+
+    invitations: {
+      async issue(invitation: NewInvitation) {
+        await db
+          .delete(s.invitation)
+          .where(
+            and(
+              sql`lower(${s.invitation.email}) = lower(${invitation.email})`,
+              isNull(s.invitation.acceptedAt),
+            ),
+          );
+        const row: InvitationRow = {
+          ...invitation,
+          acceptedAt: null,
+          acceptedUserId: null,
+          createdAt: now(),
+        };
+        await db.insert(s.invitation).values(mappers.invitation.toRow(row, a));
+        return row;
+      },
+      async findByHash(tokenHash) {
+        const rows = await db
+          .select()
+          .from(s.invitation)
+          .where(eq(s.invitation.tokenHash, tokenHash))
+          .limit(1);
+        return first<InvitationRow>(rows, mappers.invitation.toDomain);
+      },
+      async consume(id, acceptedUserId, at) {
+        await db
+          .update(s.invitation)
+          .set(
+            mappers.invitation.toRow(
+              { acceptedAt: at, acceptedUserId },
+              a,
+            ),
+          )
+          .where(eq(s.invitation.id, id));
       },
     },
   };
