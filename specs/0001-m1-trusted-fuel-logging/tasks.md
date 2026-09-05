@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T6b.1
-- **Next task:** T6b.2
+- **Last completed task:** T6b.2 (slice 6b complete)
+- **Next task:** T7.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -228,7 +228,7 @@ pause with almost no rework.
   (FR-3.1) via `PATCH /admin/settings`; FR-9.2 guard on removing `password`.
   *done when:* removing `password` while a user has no identity is rejected
   `auth_method_required`.
-- [ ] **T6b.2** `open` self-register: `POST /register` creates an unverified
+- [x] **T6b.2** `open` self-register: `POST /register` creates an unverified
   user + a `user_token` `verify`; `POST /verify` consumes it and sets
   `email_verified_at`; unverified users cannot sign in (FR-3.5).
   *done when:* the flow works; the verify link is returned when `EMAIL_*` is

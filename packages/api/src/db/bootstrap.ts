@@ -336,7 +336,9 @@ export async function seedDeployment(
     await repos.users.create({
       id: adminId,
       email,
-      emailVerifiedAt: null,
+      // The operator running bootstrap supplied this email directly; there is
+      // no verification flow for it (FR-3.5 gates self-registration only).
+      emailVerifiedAt: new Date(),
       displayName: "Administrator",
       role: "admin",
       status: "active",

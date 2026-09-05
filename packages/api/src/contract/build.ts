@@ -11,6 +11,7 @@ import {
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
 import { InvitationAcceptBody } from "../routes/invitations";
 import { ProfileUpdateBody } from "../routes/profile";
+import { RegisterBody, VerifyBody } from "../routes/register";
 import { TokenCreateBody } from "../routes/tokens";
 
 /**
@@ -306,6 +307,61 @@ export function buildOpenApiDocument(): Json {
             "204": emptyResponse("Revoked (or already revoked)"),
             "401": errorResponse("Not authenticated"),
             "404": errorResponse("No such token for this user"),
+          },
+        },
+      },
+      "/register": {
+        post: {
+          operationId: "register",
+          summary: "Self-register an account",
+          description:
+            "Unauthenticated. Active only while the deployment's " +
+            "registration_policy is `open` (FR-3.5). The account cannot sign " +
+            "in until it verifies its email with POST /verify. The verify " +
+            "link is returned in the response when email is not configured " +
+            "(R-2 interim).",
+          security: [],
+          requestBody: jsonBody(bodySchema(RegisterBody)),
+          responses: {
+            "201": jsonResponse("The new, unverified account", {
+              type: "object",
+              required: ["user"],
+              properties: {
+                user: { $ref: "#/components/schemas/PublicUser" },
+                verifyToken: {
+                  type: "string",
+                  description: "Present when email is not configured",
+                },
+                note: { type: "string" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "403": errorResponse("Self-registration is not enabled"),
+            "409": errorResponse("Email already registered"),
+            "429": errorResponse("Rate limited; see Retry-After"),
+          },
+        },
+      },
+      "/verify": {
+        post: {
+          operationId: "verifyEmail",
+          summary: "Consume a verification link",
+          description:
+            "Unauthenticated. Sets `emailVerifiedAt` so the account can sign " +
+            "in.",
+          security: [],
+          requestBody: jsonBody(bodySchema(VerifyBody)),
+          responses: {
+            "200": jsonResponse("The now-verified account", {
+              type: "object",
+              required: ["user"],
+              properties: {
+                user: { $ref: "#/components/schemas/PublicUser" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "404": errorResponse("Invalid, expired, or already-used link"),
+            "429": errorResponse("Rate limited; see Retry-After"),
           },
         },
       },

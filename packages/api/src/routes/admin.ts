@@ -301,7 +301,9 @@ export function adminRoutes(deps: AppDeps): Hono<AppHono> {
     const row: UserRow = {
       id: newId(),
       email: body.email,
-      emailVerifiedAt: null,
+      // An admin vouches for this email directly (FR-3.5 gates
+      // self-registration only, not admin-created accounts).
+      emailVerifiedAt: now,
       displayName: body.displayName,
       role: body.role,
       status: "active",

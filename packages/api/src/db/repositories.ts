@@ -524,6 +524,20 @@ export function issueUserTokenInTx(
   db.insert(s.userToken).values(mappers.userToken.toRow(row, a)).run();
 }
 
+/** Mark a `user_token` used. */
+export function consumeUserTokenInTx(
+  tx: Tx,
+  id: string,
+  at: Date,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const value = a === "sqlite" ? at.toISOString() : at;
+  return settle(
+    tx,
+    db.update(s.userToken).set({ usedAt: value }).where(eq(s.userToken.id, id)),
+  );
+}
+
 /** Patch the `deployment_settings` singleton. `updatedAt` is set here. */
 export function updateSettingsInTx(
   tx: Tx,

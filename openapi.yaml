@@ -379,6 +379,127 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /register:
+    post:
+      operationId: register
+      summary: Self-register an account
+      description: Unauthenticated. Active only while the deployment's
+        registration_policy is `open` (FR-3.5). The account cannot sign in until
+        it verifies its email with POST /verify. The verify link is returned in
+        the response when email is not configured (R-2 interim).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                password:
+                  type: string
+                  minLength: 8
+              required:
+                - email
+                - displayName
+                - password
+              additionalProperties: false
+      responses:
+        "201":
+          description: The new, unverified account
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    $ref: "#/components/schemas/PublicUser"
+                  verifyToken:
+                    type: string
+                    description: Present when email is not configured
+                  note:
+                    type: string
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Self-registration is not enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limited; see Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /verify:
+    post:
+      operationId: verifyEmail
+      summary: Consume a verification link
+      description: Unauthenticated. Sets `emailVerifiedAt` so the account can sign in.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+              required:
+                - token
+              additionalProperties: false
+      responses:
+        "200":
+          description: The now-verified account
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                properties:
+                  user:
+                    $ref: "#/components/schemas/PublicUser"
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Invalid, expired, or already-used link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limited; see Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/invitations:
     post:
       operationId: adminCreateInvitation
