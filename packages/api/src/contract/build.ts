@@ -478,6 +478,42 @@ export function buildOpenApiDocument(): Json {
           },
         },
       },
+      "/identities": {
+        get: {
+          operationId: "listIdentities",
+          summary: "List the caller's linked OIDC identities",
+          description: "Requires authentication (T7.4).",
+          responses: {
+            "200": jsonResponse("The caller's linked identities", {
+              type: "object",
+              required: ["identities"],
+              properties: {
+                identities: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/Identity" },
+                },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+          },
+        },
+      },
+      "/identities/{id}": {
+        delete: {
+          operationId: "unlinkIdentity",
+          summary: "Unlink one of the caller's OIDC identities",
+          description:
+            "Requires authentication (FR-6.3). Refused if this is the " +
+            "caller's only sign-in method.",
+          parameters: [idParam],
+          responses: {
+            "204": emptyResponse("Unlinked"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such identity for this user"),
+            "422": errorResponse("This is the caller's only sign-in method"),
+          },
+        },
+      },
       "/admin/oidc-providers": {
         get: {
           operationId: "adminListOidcProviders",
@@ -919,6 +955,17 @@ export function buildOpenApiDocument(): Json {
             fuelVolumePrecision: { type: "integer", minimum: 1, maximum: 3 },
             sessionTtlSeconds: { type: "integer", minimum: 60 },
             apiTokenTtlSeconds: { type: ["integer", "null"], minimum: 60 },
+          },
+        },
+        Identity: {
+          type: "object",
+          required: ["id", "providerKey", "subject", "createdAt", "lastLoginAt"],
+          properties: {
+            id: { type: "string" },
+            providerKey: { type: "string" },
+            subject: { type: "string" },
+            createdAt: { type: "string", format: "date-time" },
+            lastLoginAt: { type: ["string", "null"], format: "date-time" },
           },
         },
         OidcProvider: {

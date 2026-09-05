@@ -642,6 +642,65 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /identities:
+    get:
+      operationId: listIdentities
+      summary: List the caller's linked OIDC identities
+      description: Requires authentication (T7.4).
+      responses:
+        "200":
+          description: The caller's linked identities
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - identities
+                properties:
+                  identities:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Identity"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /identities/{id}:
+    delete:
+      operationId: unlinkIdentity
+      summary: Unlink one of the caller's OIDC identities
+      description: Requires authentication (FR-6.3). Refused if this is the caller's
+        only sign-in method.
+      parameters:
+        - &a3
+          name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Unlinked
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such identity for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: This is the caller's only sign-in method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/oidc-providers:
     get:
       operationId: adminListOidcProviders
@@ -1327,12 +1386,7 @@ paths:
       description: Admin only. Adds last sign-in, linked identities, and the active
         API-token count. No fuel entry data is ever included (INV-9).
       parameters:
-        - &a3
-          name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - *a3
       responses:
         "200":
           description: The account
@@ -1757,6 +1811,29 @@ components:
             - integer
             - "null"
           minimum: 60
+    Identity:
+      type: object
+      required:
+        - id
+        - providerKey
+        - subject
+        - createdAt
+        - lastLoginAt
+      properties:
+        id:
+          type: string
+        providerKey:
+          type: string
+        subject:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type:
+            - string
+            - "null"
+          format: date-time
     OidcProvider:
       type: object
       required:

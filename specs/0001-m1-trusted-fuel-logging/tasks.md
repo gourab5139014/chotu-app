@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T7.3 + T7.5 (built together — the mock issuer is T7.3's test infra)
-- **Next task:** T7.4
+- **Last completed task:** T7.4 (slice 7 complete)
+- **Next task:** T8.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -249,7 +249,7 @@ pause with almost no rework.
   `sso_auto`, consume, start session) — FR-6.2, FR-6.4.
   *done when:* the mock issuer flow completes and an out-of-domain sign-in is
   rejected (AC-11).
-- [ ] **T7.4** Link / unlink an identity for a signed-in user; unlink refused
+- [x] **T7.4** Link / unlink an identity for a signed-in user; unlink refused
   when it would leave no sign-in method (FR-6.3).
   *done when:* link works; the last-method unlink is rejected
   `auth_method_required`.
