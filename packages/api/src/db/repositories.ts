@@ -22,12 +22,14 @@ import type {
   NewSession,
   NewUser,
   NewUserToken,
+  NewVehicle,
   OidcLoginRow,
   OidcProviderRow,
   SchemaMetaRow,
   SessionRow,
   UserRow,
   UserTokenRow,
+  VehicleRow,
 } from "./schema/types";
 import type { Adapter, DbHandle } from "./index";
 import type { Tx } from "./uow";
@@ -496,6 +498,54 @@ export function makeRepos(handle: DbHandle): Repos {
         await db.delete(s.identity).where(eq(s.identity.id, id));
       },
     },
+
+    vehicles: {
+      async create(v: NewVehicle) {
+        const ts = now();
+        const row: VehicleRow = { ...v, archivedAt: null, createdAt: ts, updatedAt: ts };
+        await db.insert(s.vehicle).values(mappers.vehicle.toRow(row, a));
+        return row;
+      },
+      async findById(id) {
+        const rows = await db
+          .select()
+          .from(s.vehicle)
+          .where(eq(s.vehicle.id, id))
+          .limit(1);
+        return first<VehicleRow>(rows, mappers.vehicle.toDomain);
+      },
+      async listForUser(userId, opts = {}) {
+        const where =
+          opts.activeOnly === true
+            ? and(eq(s.vehicle.userId, userId), isNull(s.vehicle.archivedAt))
+            : eq(s.vehicle.userId, userId);
+        const rows = await db
+          .select()
+          .from(s.vehicle)
+          .where(where)
+          .orderBy(desc(s.vehicle.createdAt));
+        return rows.map((r: any) => mappers.vehicle.toDomain(r));
+      },
+      async countForUser(userId) {
+        const rows = await db
+          .select({ n: sql<number>`count(*)` })
+          .from(s.vehicle)
+          .where(and(eq(s.vehicle.userId, userId), isNull(s.vehicle.archivedAt)));
+        return Number(rows[0]?.n ?? 0);
+      },
+      async update(id, patch) {
+        const values = mappers.vehicle.toRow({ ...patch, updatedAt: now() }, a);
+        const rows = await returningAll(
+          db.update(s.vehicle).set(values).where(eq(s.vehicle.id, id)),
+        );
+        const updated = first<VehicleRow>(rows, mappers.vehicle.toDomain);
+        if (updated == null) throw new Error(`vehicle ${id} not found`);
+        return updated;
+      },
+      async delete(id) {
+        await db.delete(s.vehicle).where(eq(s.vehicle.id, id));
+      },
+    },
   };
 }
 
@@ -514,12 +564,20 @@ export function countActiveAdminsInTx(tx: Tx): number | Promise<number> {
 
 /** Delete a user row on an open transaction. FK cascades take the dependents. */
 export function deleteUserInTx(tx: Tx, userId: string): void | Promise<void> {
+  // vehicle.user_id and (from slice 9) fuel_entry.vehicle_id are ON DELETE
+  // RESTRICT (data-model), by design — so the user's vehicles (and, once
+  // fuel_entry exists, their entries first) must be removed explicitly here,
+  // in the same transaction, before the user row (FR-7.3, FR-8.6).
   if (tx.dialect === "postgres") {
     return tx.db
-      .delete(pgSchema.user)
-      .where(eq(pgSchema.user.id, userId))
+      .delete(pgSchema.vehicle)
+      .where(eq(pgSchema.vehicle.userId, userId))
+      .then(() =>
+        tx.db.delete(pgSchema.user).where(eq(pgSchema.user.id, userId)),
+      )
       .then(() => undefined);
   }
+  tx.db.delete(sqliteSchema.vehicle).where(eq(sqliteSchema.vehicle.userId, userId)).run();
   tx.db.delete(sqliteSchema.user).where(eq(sqliteSchema.user.id, userId)).run();
 }
 

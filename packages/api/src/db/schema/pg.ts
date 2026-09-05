@@ -267,3 +267,38 @@ export const identity = pgTable(
     index("identity_user_ix").on(t.userId),
   ],
 );
+
+export const vehicle = pgTable(
+  "vehicle",
+  {
+    id: f.uuidPk().pg,
+    userId: f
+      .uuidRef("user_id")
+      .pg.notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    name: f.text("name").pg.notNull(),
+    make: f.text("make").pg,
+    model: f.text("model").pg,
+    year: f.intNum("year").pg,
+    fuelType: f.text("fuel_type").pg,
+    initialOdometerMiE3: f.bigintNum("initial_odometer_mi_e3").pg.notNull(),
+    archivedAt: f.timestamptz("archived_at").pg,
+    createdAt: f.timestamptz("created_at").pg.notNull(),
+    updatedAt: f.timestamptz("updated_at").pg.notNull(),
+  },
+  (t) => [
+    uniqueIndex("vehicle_user_name_active_uq")
+      .on(t.userId, t.name)
+      .where(sql`${t.archivedAt} is null`),
+    index("vehicle_user_archived_ix").on(t.userId, t.archivedAt),
+    check(
+      "vehicle_initial_odometer_ck",
+      sql`${t.initialOdometerMiE3} >= 0`,
+    ),
+    check("vehicle_year_ck", sql`${t.year} is null or ${t.year} between 1900 and 2100`),
+    check(
+      "vehicle_fuel_type_ck",
+      sql`${t.fuelType} is null or ${t.fuelType} in ('gasoline', 'diesel', 'ev', 'hybrid', 'other')`,
+    ),
+  ],
+);

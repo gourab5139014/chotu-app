@@ -463,4 +463,92 @@ describeEachAdapter("repositories", (ctx) => {
       expect(await identities.countForProvider(providerKey)).toBe(0);
     });
   });
+
+  describe("vehicles", () => {
+    let userId: string;
+    beforeEach(async () => {
+      userId = (await ctx().repos.users.create(newUser())).id;
+    });
+
+    it("create / findById / update / delete", async () => {
+      const { vehicles } = ctx().repos;
+      const row = await vehicles.create({
+        id: randomUUID(),
+        userId,
+        name: "Civic",
+        make: "Honda",
+        model: "Civic",
+        year: 2020,
+        fuelType: "gasoline",
+        initialOdometerMiE3: 12_345_000,
+      });
+      expect(row.archivedAt).toBeNull();
+
+      const found = await vehicles.findById(row.id);
+      expect(found?.name).toBe("Civic");
+      expect(found?.initialOdometerMiE3).toBe(12_345_000);
+
+      const updated = await vehicles.update(row.id, { name: "Civic (renamed)" });
+      expect(updated.name).toBe("Civic (renamed)");
+
+      await vehicles.delete(row.id);
+      expect(await vehicles.findById(row.id)).toBeNull();
+    });
+
+    it("listForUser / countForUser respect activeOnly and archived_at", async () => {
+      const { vehicles } = ctx().repos;
+      const a = await vehicles.create({
+        id: randomUUID(),
+        userId,
+        name: "Active One",
+        make: null,
+        model: null,
+        year: null,
+        fuelType: null,
+        initialOdometerMiE3: 0,
+      });
+      const b = await vehicles.create({
+        id: randomUUID(),
+        userId,
+        name: "Archived One",
+        make: null,
+        model: null,
+        year: null,
+        fuelType: null,
+        initialOdometerMiE3: 0,
+      });
+      await vehicles.update(b.id, { archivedAt: new Date() });
+
+      expect((await vehicles.listForUser(userId)).length).toBe(2);
+      const active = await vehicles.listForUser(userId, { activeOnly: true });
+      expect(active.map((v) => v.id)).toEqual([a.id]);
+      expect(await vehicles.countForUser(userId)).toBe(1);
+    });
+
+    it("a second active vehicle with the same name is rejected by the DB", async () => {
+      const { vehicles } = ctx().repos;
+      await vehicles.create({
+        id: randomUUID(),
+        userId,
+        name: "Dupe",
+        make: null,
+        model: null,
+        year: null,
+        fuelType: null,
+        initialOdometerMiE3: 0,
+      });
+      await expect(
+        vehicles.create({
+          id: randomUUID(),
+          userId,
+          name: "Dupe",
+          make: null,
+          model: null,
+          year: null,
+          fuelType: null,
+          initialOdometerMiE3: 0,
+        }),
+      ).rejects.toThrow();
+    });
+  });
 });
