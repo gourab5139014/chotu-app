@@ -38,11 +38,11 @@ CREATE TABLE "oidc_provider" (
 	CONSTRAINT "oidc_provider_key_ck" CHECK ("oidc_provider"."key" ~ '^[a-z0-9-]{1,40}$')
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX "oidc_provider_key_uq" ON "oidc_provider" USING btree ("key");--> statement-breakpoint
 ALTER TABLE "identity" ADD CONSTRAINT "identity_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "identity" ADD CONSTRAINT "identity_provider_key_oidc_provider_key_fk" FOREIGN KEY ("provider_key") REFERENCES "public"."oidc_provider"("key") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "oidc_login" ADD CONSTRAINT "oidc_login_provider_key_oidc_provider_key_fk" FOREIGN KEY ("provider_key") REFERENCES "public"."oidc_provider"("key") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "oidc_login" ADD CONSTRAINT "oidc_login_link_user_id_user_id_fk" FOREIGN KEY ("link_user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "identity_provider_subject_uq" ON "identity" USING btree ("provider_key","subject");--> statement-breakpoint
 CREATE INDEX "identity_user_ix" ON "identity" USING btree ("user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "oidc_login_state_hash_uq" ON "oidc_login" USING btree ("state_hash");--> statement-breakpoint
-CREATE UNIQUE INDEX "oidc_provider_key_uq" ON "oidc_provider" USING btree ("key");
+CREATE UNIQUE INDEX "oidc_login_state_hash_uq" ON "oidc_login" USING btree ("state_hash");
