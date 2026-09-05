@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T8.1
-- **Next task:** T8.2
+- **Last completed task:** T8.2
+- **Next task:** T8.3
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -262,7 +262,7 @@ pause with almost no rework.
 - [x] **T8.1** `vehicle` table + `VehicleRepo` (both dialects); `name` unique
   per user among non-archived; FK `on delete restrict`.
   *done when:* `drizzle-kit check` green; repo tests pass.
-- [ ] **T8.2** `units/` module: `toCanonical` / `fromCanonical`, half-away-from-
+- [x] **T8.2** `units/` module: `toCanonical` / `fromCanonical`, half-away-from-
   zero rounding, `roundVolume`, `formatPrice`, distance display precision.
   *done when:* property test — imperial round trip is exact, metric round trip
   is stable at display precision (FR-15.4).
