@@ -10,13 +10,19 @@ import type {
   ApiTokenRow,
   AuditLogRow,
   DeploymentSettingsRow,
+  IdentityRow,
   InvitationRow,
   NewApiToken,
   NewAuditLog,
+  NewIdentity,
   NewInvitation,
+  NewOidcLogin,
+  NewOidcProvider,
   NewSession,
   NewUser,
   NewUserToken,
+  OidcLoginRow,
+  OidcProviderRow,
   SchemaMetaRow,
   SessionRow,
   UserRow,
@@ -86,6 +92,38 @@ export interface InvitationRepo {
   consume(id: string, acceptedUserId: string, at: Date): Promise<void>;
 }
 
+export interface OidcProviderRepo {
+  create(p: NewOidcProvider): Promise<OidcProviderRow>;
+  findByKey(key: string): Promise<OidcProviderRow | null>;
+  list(): Promise<OidcProviderRow[]>;
+  update(
+    key: string,
+    patch: Partial<Omit<OidcProviderRow, "id" | "key" | "createdAt">>,
+  ): Promise<OidcProviderRow>;
+  delete(key: string): Promise<void>;
+}
+
+export interface OidcLoginRepo {
+  create(row: NewOidcLogin): Promise<OidcLoginRow>;
+  findByStateHash(stateHash: string): Promise<OidcLoginRow | null>;
+  consume(id: string, at: Date): Promise<void>;
+  deleteExpired(now: Date): Promise<number>;
+}
+
+export interface IdentityRepo {
+  create(i: NewIdentity): Promise<IdentityRow>;
+  findByProviderSubject(
+    providerKey: string,
+    subject: string,
+  ): Promise<IdentityRow | null>;
+  findById(id: string): Promise<IdentityRow | null>;
+  listForUser(userId: string): Promise<IdentityRow[]>;
+  listForProvider(providerKey: string): Promise<IdentityRow[]>;
+  countForProvider(providerKey: string): Promise<number>;
+  touchLogin(id: string, at: Date): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 export interface AuditRepo {
   /**
    * Append one audit row on the outer connection. When the row must commit or
@@ -111,4 +149,7 @@ export interface Repos {
   readonly sessions: SessionRepo;
   readonly audit: AuditRepo;
   readonly invitations: InvitationRepo;
+  readonly oidcProviders: OidcProviderRepo;
+  readonly oidcLogins: OidcLoginRepo;
+  readonly identities: IdentityRepo;
 }

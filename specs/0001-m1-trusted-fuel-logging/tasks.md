@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T6b.2 (slice 6b complete)
-- **Next task:** T7.1
+- **Last completed task:** T7.4 (slice 7 complete)
+- **Next task:** T8.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -236,24 +236,24 @@ pause with almost no rework.
 
 ## Slice 7 — OIDC
 
-- [ ] **T7.1** `oidc_provider` and `oidc_login` tables + repos + `identity`
+- [x] **T7.1** `oidc_provider` and `oidc_login` tables + repos + `identity`
   table + `IdentityRepo` (both dialects; FKs per `data-model.md`).
   *done when:* `drizzle-kit check` green; repo tests pass.
-- [ ] **T7.2** Admin provider CRUD (FR-6.1, FR-9.3): secret write-only, never
+- [x] **T7.2** Admin provider CRUD (FR-6.1, FR-9.3): secret write-only, never
   returned; delete rejected `provider_in_use` unless `force` (then unlink +
   re-check FR-6.3).
   *done when:* contract tests pass; a GET never includes the secret.
-- [ ] **T7.3** `GET /auth/oidc/:key/start` (create `oidc_login`, redirect) and
+- [x] **T7.3** `GET /auth/oidc/:key/start` (create `oidc_login`, redirect) and
   `/callback` (hash `state`, look up by `state_hash`, validate token+nonce,
   match/create `identity`, enforce domains/groups, auto-provision on
   `sso_auto`, consume, start session) — FR-6.2, FR-6.4.
   *done when:* the mock issuer flow completes and an out-of-domain sign-in is
   rejected (AC-11).
-- [ ] **T7.4** Link / unlink an identity for a signed-in user; unlink refused
+- [x] **T7.4** Link / unlink an identity for a signed-in user; unlink refused
   when it would leave no sign-in method (FR-6.3).
   *done when:* link works; the last-method unlink is rejected
   `auth_method_required`.
-- [ ] **T7.5** Mock OIDC issuer in `test/support`: discovery doc, JWKS, signed
+- [x] **T7.5** Mock OIDC issuer in `test/support`: discovery doc, JWKS, signed
   ID tokens, configurable `email` / `groups`. `oidc` fixture.
   *done when:* `openid-client` v6 validates the mock tokens end to end.
 

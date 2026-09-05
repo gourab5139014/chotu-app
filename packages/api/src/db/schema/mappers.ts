@@ -13,7 +13,10 @@ import type {
   ApiTokenRow,
   AuditLogRow,
   DeploymentSettingsRow,
+  IdentityRow,
   InvitationRow,
+  OidcLoginRow,
+  OidcProviderRow,
   SchemaMetaRow,
   SessionRow,
   UserRow,
@@ -99,6 +102,18 @@ const INVITATION: TableMap = {
   instants: ["expiresAt", "acceptedAt", "createdAt"],
   safeInts: [],
 };
+const OIDC_PROVIDER: TableMap = {
+  instants: ["createdAt", "updatedAt"],
+  safeInts: [],
+};
+const OIDC_LOGIN: TableMap = {
+  instants: ["expiresAt", "consumedAt", "createdAt"],
+  safeInts: [],
+};
+const IDENTITY: TableMap = {
+  instants: ["createdAt", "lastLoginAt"],
+  safeInts: [],
+};
 
 export const mappers = {
   schemaMeta: {
@@ -136,6 +151,20 @@ export const mappers = {
     toDomain: (r: Raw) => rowToDomain<InvitationRow>(r, INVITATION),
     toRow: (d: Partial<InvitationRow>, a: Adapter) =>
       domainToRow(d, INVITATION, a),
+  },
+  oidcProvider: {
+    toDomain: (r: Raw) => rowToDomain<OidcProviderRow>(r, OIDC_PROVIDER),
+    toRow: (d: Partial<OidcProviderRow>, a: Adapter) =>
+      domainToRow(d, OIDC_PROVIDER, a),
+  },
+  oidcLogin: {
+    toDomain: (r: Raw) => rowToDomain<OidcLoginRow>(r, OIDC_LOGIN),
+    toRow: (d: Partial<OidcLoginRow>, a: Adapter) =>
+      domainToRow(d, OIDC_LOGIN, a),
+  },
+  identity: {
+    toDomain: (r: Raw) => rowToDomain<IdentityRow>(r, IDENTITY),
+    toRow: (d: Partial<IdentityRow>, a: Adapter) => domainToRow(d, IDENTITY, a),
   },
 } as const;
 

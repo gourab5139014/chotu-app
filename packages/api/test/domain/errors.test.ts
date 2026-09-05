@@ -19,6 +19,7 @@ const ALL_CODES: ErrorCode[] = [
   "odometer_decrease",
   "last_admin",
   "auth_method_required",
+  "provider_in_use",
   "rate_limited",
   "internal_error",
 ];
@@ -55,6 +56,7 @@ describe("error model", () => {
     expect(err.odometerDecrease().status).toBe(422);
     expect(err.lastAdmin().status).toBe(422);
     expect(err.authMethodRequired().status).toBe(422);
+    expect(err.providerInUse().status).toBe(409);
     expect(err.rateLimited().status).toBe(429);
   });
 });

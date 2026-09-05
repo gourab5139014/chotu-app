@@ -10,6 +10,10 @@ import {
 } from "../routes/admin";
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
 import { InvitationAcceptBody } from "../routes/invitations";
+import {
+  OidcProviderCreateBody,
+  OidcProviderUpdateBody,
+} from "../routes/oidc-admin";
 import { ProfileUpdateBody } from "../routes/profile";
 import { RegisterBody, VerifyBody } from "../routes/register";
 import { TokenCreateBody } from "../routes/tokens";
@@ -64,6 +68,13 @@ const emptyResponse = (description: string): Json => ({ description });
 
 const idParam: Json = {
   name: "id",
+  in: "path",
+  required: true,
+  schema: { type: "string" },
+};
+
+const oidcKeyParam: Json = {
+  name: "key",
   in: "path",
   required: true,
   schema: { type: "string" },
@@ -362,6 +373,258 @@ export function buildOpenApiDocument(): Json {
             "400": errorResponse("Malformed body"),
             "404": errorResponse("Invalid, expired, or already-used link"),
             "429": errorResponse("Rate limited; see Retry-After"),
+          },
+        },
+      },
+      "/auth/oidc/{key}/start": {
+        get: {
+          operationId: "oidcStart",
+          summary: "Begin an OIDC sign-in",
+          description:
+            "Unauthenticated. Redirects (302) to the provider's authorization " +
+            "endpoint (FR-6.2).",
+          security: [],
+          parameters: [oidcKeyParam],
+          responses: {
+            "302": emptyResponse("Redirect to the provider"),
+            "404": errorResponse("No such provider, or it is disabled"),
+          },
+        },
+      },
+      "/auth/oidc/{key}/link/start": {
+        get: {
+          operationId: "oidcLinkStart",
+          summary: "Begin linking a new identity to the caller's account",
+          description:
+            "Requires authentication (T7.4). Redirects (302) to the " +
+            "provider's authorization endpoint.",
+          parameters: [oidcKeyParam],
+          responses: {
+            "302": emptyResponse("Redirect to the provider"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such provider, or it is disabled"),
+          },
+        },
+      },
+      "/auth/oidc/{key}/callback": {
+        get: {
+          operationId: "oidcCallback",
+          summary: "Complete an OIDC sign-in or link",
+          description:
+            "Unauthenticated (the provider redirects the browser here with no " +
+            "Chotu credential). Signs in on a returning identity, " +
+            "auto-provisions a new account when the provider and the " +
+            "deployment's registration_policy both allow it, or links the " +
+            "identity to the user who started a /link/start attempt. An " +
+            "expired, unknown, or already-consumed attempt, an out-of-domain " +
+            "or out-of-group identity (AC-11), or a provider mismatch all " +
+            "fail without creating anything.",
+          security: [],
+          parameters: [
+            oidcKeyParam,
+            {
+              name: "state",
+              in: "query",
+              required: true,
+              schema: { type: "string" },
+            },
+            {
+              name: "code",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": jsonResponse(
+              "Signed in (or a /link/start attempt completed)",
+              {
+                oneOf: [
+                  {
+                    type: "object",
+                    required: ["user", "session", "expiresAt"],
+                    properties: {
+                      user: { $ref: "#/components/schemas/PublicUser" },
+                      session: { type: "string" },
+                      expiresAt: { type: "string", format: "date-time" },
+                    },
+                  },
+                  {
+                    type: "object",
+                    required: ["linked", "providerKey"],
+                    properties: {
+                      linked: { type: "boolean", const: true },
+                      providerKey: { type: "string" },
+                    },
+                  },
+                ],
+              },
+            ),
+            "201": jsonResponse("Auto-provisioned and signed in", {
+              type: "object",
+              required: ["user", "session", "expiresAt"],
+              properties: {
+                user: { $ref: "#/components/schemas/PublicUser" },
+                session: { type: "string" },
+                expiresAt: { type: "string", format: "date-time" },
+              },
+            }),
+            "401": errorResponse("Invalid, expired, or already-used attempt"),
+            "403": errorResponse(
+              "Disabled provider, out-of-domain/group identity, or no email claim",
+            ),
+            "404": errorResponse("No such provider or user"),
+            "409": errorResponse("Already linked to a different user, or email taken"),
+          },
+        },
+      },
+      "/identities": {
+        get: {
+          operationId: "listIdentities",
+          summary: "List the caller's linked OIDC identities",
+          description: "Requires authentication (T7.4).",
+          responses: {
+            "200": jsonResponse("The caller's linked identities", {
+              type: "object",
+              required: ["identities"],
+              properties: {
+                identities: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/Identity" },
+                },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+          },
+        },
+      },
+      "/identities/{id}": {
+        delete: {
+          operationId: "unlinkIdentity",
+          summary: "Unlink one of the caller's OIDC identities",
+          description:
+            "Requires authentication (FR-6.3). Refused if this is the " +
+            "caller's only sign-in method.",
+          parameters: [idParam],
+          responses: {
+            "204": emptyResponse("Unlinked"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such identity for this user"),
+            "422": errorResponse("This is the caller's only sign-in method"),
+          },
+        },
+      },
+      "/admin/oidc-providers": {
+        get: {
+          operationId: "adminListOidcProviders",
+          summary: "List OIDC providers",
+          description:
+            "Admin only (FR-9.3). The client secret reference is never " +
+            "returned; `secretConfigured` is always true.",
+          responses: {
+            "200": jsonResponse("Every configured provider", {
+              type: "object",
+              required: ["providers"],
+              properties: {
+                providers: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/OidcProvider" },
+                },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+          },
+        },
+        post: {
+          operationId: "adminCreateOidcProvider",
+          summary: "Add an OIDC provider",
+          description:
+            "Admin only (FR-6.1). `clientSecretRef` is an environment " +
+            'reference, for example "env:MY_PROVIDER_SECRET" — the operator ' +
+            "sets that variable on the host; Chotu never stores the raw secret.",
+          requestBody: jsonBody(bodySchema(OidcProviderCreateBody)),
+          responses: {
+            "201": jsonResponse("The new provider", {
+              type: "object",
+              required: ["provider"],
+              properties: {
+                provider: { $ref: "#/components/schemas/OidcProvider" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "409": errorResponse("That provider key is already in use"),
+          },
+        },
+      },
+      "/admin/oidc-providers/{key}": {
+        get: {
+          operationId: "adminGetOidcProvider",
+          summary: "Read one OIDC provider",
+          description: "Admin only (FR-9.3).",
+          parameters: [oidcKeyParam],
+          responses: {
+            "200": jsonResponse("The provider", {
+              type: "object",
+              required: ["provider"],
+              properties: {
+                provider: { $ref: "#/components/schemas/OidcProvider" },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "404": errorResponse("No such provider"),
+          },
+        },
+        patch: {
+          operationId: "adminUpdateOidcProvider",
+          summary: "Update an OIDC provider",
+          description: "Admin only (FR-9.3). `key` cannot be changed.",
+          parameters: [oidcKeyParam],
+          requestBody: jsonBody(bodySchema(OidcProviderUpdateBody)),
+          responses: {
+            "200": jsonResponse("The updated provider", {
+              type: "object",
+              required: ["provider"],
+              properties: {
+                provider: { $ref: "#/components/schemas/OidcProvider" },
+              },
+            }),
+            "400": errorResponse("Malformed body or no field to change"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "404": errorResponse("No such provider"),
+          },
+        },
+        delete: {
+          operationId: "adminDeleteOidcProvider",
+          summary: "Delete an OIDC provider",
+          description:
+            "Admin only. Refused with `provider_in_use` while any identity " +
+            "is linked to this provider, unless `?force=true`, which unlinks " +
+            "every affected identity first and refuses the whole delete " +
+            "(`auth_method_required`) if that would leave any user with no " +
+            "sign-in method.",
+          parameters: [
+            oidcKeyParam,
+            {
+              name: "force",
+              in: "query",
+              required: false,
+              schema: { type: "boolean", default: false },
+            },
+          ],
+          responses: {
+            "204": emptyResponse("Deleted"),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+            "404": errorResponse("No such provider"),
+            "409": errorResponse("Linked identities exist; retry with force"),
+            "422": errorResponse(
+              "Force-deleting would leave a user with no sign-in method",
+            ),
           },
         },
       },
@@ -692,6 +955,57 @@ export function buildOpenApiDocument(): Json {
             fuelVolumePrecision: { type: "integer", minimum: 1, maximum: 3 },
             sessionTtlSeconds: { type: "integer", minimum: 60 },
             apiTokenTtlSeconds: { type: ["integer", "null"], minimum: 60 },
+          },
+        },
+        Identity: {
+          type: "object",
+          required: ["id", "providerKey", "subject", "createdAt", "lastLoginAt"],
+          properties: {
+            id: { type: "string" },
+            providerKey: { type: "string" },
+            subject: { type: "string" },
+            createdAt: { type: "string", format: "date-time" },
+            lastLoginAt: { type: ["string", "null"], format: "date-time" },
+          },
+        },
+        OidcProvider: {
+          type: "object",
+          required: [
+            "id",
+            "key",
+            "displayName",
+            "issuerUrl",
+            "clientId",
+            "secretConfigured",
+            "scopes",
+            "allowedEmailDomains",
+            "allowedGroups",
+            "autoProvision",
+            "enabled",
+            "createdAt",
+            "updatedAt",
+          ],
+          properties: {
+            id: { type: "string" },
+            key: { type: "string" },
+            displayName: { type: "string" },
+            issuerUrl: { type: "string", format: "uri" },
+            clientId: { type: "string" },
+            secretConfigured: {
+              type: "boolean",
+              const: true,
+              description: "The client secret is write-only and never returned",
+            },
+            scopes: { type: "array", items: { type: "string" } },
+            allowedEmailDomains: {
+              type: ["array", "null"],
+              items: { type: "string" },
+            },
+            allowedGroups: { type: ["array", "null"], items: { type: "string" } },
+            autoProvision: { type: "boolean" },
+            enabled: { type: "boolean" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
           },
         },
         AdminUserListItem: {

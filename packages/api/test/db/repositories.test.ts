@@ -326,4 +326,141 @@ describeEachAdapter("repositories", (ctx) => {
       );
     });
   });
+
+  describe("oidcProviders", () => {
+    it("create / findByKey / list / update / delete", async () => {
+      const { oidcProviders } = ctx().repos;
+      const created = await oidcProviders.create({
+        id: randomUUID(),
+        key: "okta",
+        displayName: "Okta",
+        issuerUrl: "https://example.okta.com",
+        clientId: "client-1",
+        clientSecretRef: "env:OKTA_SECRET",
+        scopes: ["openid", "email", "profile"],
+        allowedEmailDomains: ["example.com"],
+        allowedGroups: null,
+        autoProvision: true,
+        enabled: true,
+      });
+      expect(created.key).toBe("okta");
+
+      const found = await oidcProviders.findByKey("okta");
+      expect(found?.displayName).toBe("Okta");
+      expect(found?.allowedEmailDomains).toEqual(["example.com"]);
+
+      expect((await oidcProviders.list()).length).toBe(1);
+
+      const updated = await oidcProviders.update("okta", { enabled: false });
+      expect(updated.enabled).toBe(false);
+
+      await oidcProviders.delete("okta");
+      expect(await oidcProviders.findByKey("okta")).toBeNull();
+    });
+  });
+
+  describe("oidcLogins", () => {
+    let providerKey: string;
+    beforeEach(async () => {
+      providerKey = "test-idp";
+      await ctx().repos.oidcProviders.create({
+        id: randomUUID(),
+        key: providerKey,
+        displayName: "Test IdP",
+        issuerUrl: "https://idp.example.com",
+        clientId: "c1",
+        clientSecretRef: "env:X",
+        scopes: ["openid"],
+        allowedEmailDomains: null,
+        allowedGroups: null,
+        autoProvision: false,
+        enabled: true,
+      });
+    });
+
+    it("create / findByStateHash / consume / deleteExpired", async () => {
+      const { oidcLogins } = ctx().repos;
+      const row = await oidcLogins.create({
+        id: randomUUID(),
+        providerKey,
+        stateHash: "state-hash-1",
+        codeVerifier: "verifier",
+        nonce: "nonce-1",
+        redirectTo: null,
+        linkUserId: null,
+        expiresAt: new Date(Date.now() + 600_000),
+      });
+      expect(row.consumedAt).toBeNull();
+
+      const found = await oidcLogins.findByStateHash("state-hash-1");
+      expect(found?.providerKey).toBe(providerKey);
+
+      await oidcLogins.consume(row.id, new Date());
+      expect(
+        (await oidcLogins.findByStateHash("state-hash-1"))?.consumedAt,
+      ).toBeInstanceOf(Date);
+
+      await oidcLogins.create({
+        id: randomUUID(),
+        providerKey,
+        stateHash: "state-hash-expired",
+        codeVerifier: "verifier",
+        nonce: null,
+        redirectTo: null,
+        linkUserId: null,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+      expect(await oidcLogins.deleteExpired(new Date())).toBe(1);
+      expect(await oidcLogins.findByStateHash("state-hash-expired")).toBeNull();
+    });
+  });
+
+  describe("identities", () => {
+    let userId: string;
+    let providerKey: string;
+    beforeEach(async () => {
+      userId = (await ctx().repos.users.create(newUser())).id;
+      providerKey = "test-idp-2";
+      await ctx().repos.oidcProviders.create({
+        id: randomUUID(),
+        key: providerKey,
+        displayName: "Test IdP 2",
+        issuerUrl: "https://idp2.example.com",
+        clientId: "c1",
+        clientSecretRef: "env:X",
+        scopes: ["openid"],
+        allowedEmailDomains: null,
+        allowedGroups: null,
+        autoProvision: false,
+        enabled: true,
+      });
+    });
+
+    it("create / findByProviderSubject / listForUser / touchLogin / delete", async () => {
+      const { identities } = ctx().repos;
+      const row = await identities.create({
+        id: randomUUID(),
+        userId,
+        providerKey,
+        subject: "sub-123",
+        emailAtLink: "user@example.com",
+      });
+      expect(row.lastLoginAt).toBeNull();
+
+      const found = await identities.findByProviderSubject(providerKey, "sub-123");
+      expect(found?.userId).toBe(userId);
+
+      expect((await identities.listForUser(userId)).length).toBe(1);
+      expect(await identities.countForProvider(providerKey)).toBe(1);
+
+      await identities.touchLogin(row.id, new Date());
+      expect(
+        (await identities.findById(row.id))?.lastLoginAt,
+      ).toBeInstanceOf(Date);
+
+      await identities.delete(row.id);
+      expect(await identities.findById(row.id)).toBeNull();
+      expect(await identities.countForProvider(providerKey)).toBe(0);
+    });
+  });
 });
