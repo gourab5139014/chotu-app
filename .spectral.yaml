@@ -6,3 +6,24 @@ rules:
   operation-tag-defined: off
   operation-tags: off
   oas3-unused-component: off
+
+  # FR-19.3: every operation must carry a description an LLM client can act on.
+  operation-description: error
+  operation-description-length:
+    description: >-
+      Operation descriptions must be substantive enough for an LLM client to
+      call the endpoint from the document alone (FR-19.3).
+    severity: error
+    given: "$.paths[*][get,put,post,patch,delete]"
+    then:
+      field: description
+      function: length
+      functionOptions:
+        min: 40
+  operation-has-summary:
+    description: Every operation needs a short summary.
+    severity: error
+    given: "$.paths[*][get,put,post,patch,delete]"
+    then:
+      field: summary
+      function: truthy

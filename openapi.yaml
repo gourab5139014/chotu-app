@@ -735,7 +735,9 @@ paths:
     delete:
       operationId: deleteFuelEntry
       summary: Delete a fuel entry
-      description: Requires authentication (FR-12.5).
+      description: Requires authentication (FR-12.5). Hard-deletes the entry. History
+        and reconciliation recompute correctly afterward. An entry the caller
+        does not own is 404.
       parameters:
         - *a1
       responses:
@@ -1397,7 +1399,8 @@ paths:
     get:
       operationId: listIdentities
       summary: List the caller's linked OIDC identities
-      description: Requires authentication (T7.4).
+      description: Requires authentication (T7.4). Lists the OIDC identities linked to
+        the caller's own account, with the provider key and last login time.
       responses:
         "200":
           description: The caller's linked identities
@@ -1586,7 +1589,8 @@ paths:
     get:
       operationId: adminGetOidcProvider
       summary: Read one OIDC provider
-      description: Admin only (FR-9.3).
+      description: Admin only (FR-9.3). Returns one provider's configuration. The
+        client secret reference is never included.
       parameters:
         - *a2
       responses:
@@ -1908,7 +1912,9 @@ paths:
     get:
       operationId: adminGetSettings
       summary: Read the deployment settings
-      description: Admin only (FR-9.1).
+      description: "Admin only (FR-9.1). Returns the deployment settings: name,
+        registration policy, allowed auth methods, default unit system and time
+        zone, fuel volume precision, and session/token TTLs."
       responses:
         "200":
           description: The current settings
@@ -2256,7 +2262,8 @@ paths:
     post:
       operationId: adminReactivateUser
       summary: Reactivate an account
-      description: Admin only (FR-8.4).
+      description: Admin only (FR-8.4). Clears status and deactivated_at so the user
+        can sign in again. Idempotent if the user is already active.
       parameters:
         - *a1
       responses:
@@ -2290,7 +2297,8 @@ paths:
     post:
       operationId: adminGrantAdmin
       summary: Grant the admin role
-      description: Admin only (FR-8.7).
+      description: Admin only (FR-8.7). Sets the target user's role to admin.
+        Idempotent if they are already an admin.
       parameters:
         - *a1
       responses:
@@ -2401,7 +2409,8 @@ paths:
     get:
       operationId: getOpenApi
       summary: This document
-      description: Unauthenticated.
+      description: Unauthenticated (FR-19.1). Serves this document as YAML — the same
+        content as the committed openapi.yaml.
       security: []
       responses:
         "200":

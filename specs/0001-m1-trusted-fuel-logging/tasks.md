@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T10.3 (slice 10 complete)
-- **Next task:** T11.1
+- **Last completed task:** T11.1
+- **Next task:** T11.2
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -332,7 +332,7 @@ pause with almost no rework.
 
 ## Slice 11 — Hardening
 
-- [ ] **T11.1** Fill OpenAPI descriptions for LLM callers on every route
+- [x] **T11.1** Fill OpenAPI descriptions for LLM callers on every route
   (FR-19.3); Spectral rule for description length.
   *done when:* Spectral passes with the description rule on.
 - [ ] **T11.2** Isolation-matrix test covers **every** user-scoped route

@@ -469,7 +469,10 @@ export function buildOpenApiDocument(): Json {
         delete: {
           operationId: "deleteFuelEntry",
           summary: "Delete a fuel entry",
-          description: "Requires authentication (FR-12.5).",
+          description:
+            "Requires authentication (FR-12.5). Hard-deletes the entry. " +
+            "History and reconciliation recompute correctly afterward. An " +
+            "entry the caller does not own is 404.",
           parameters: [idParam],
           responses: {
             "204": emptyResponse("Deleted"),
@@ -878,7 +881,10 @@ export function buildOpenApiDocument(): Json {
         get: {
           operationId: "listIdentities",
           summary: "List the caller's linked OIDC identities",
-          description: "Requires authentication (T7.4).",
+          description:
+            "Requires authentication (T7.4). Lists the OIDC identities " +
+            "linked to the caller's own account, with the provider key and " +
+            "last login time.",
           responses: {
             "200": jsonResponse("The caller's linked identities", {
               type: "object",
@@ -959,7 +965,9 @@ export function buildOpenApiDocument(): Json {
         get: {
           operationId: "adminGetOidcProvider",
           summary: "Read one OIDC provider",
-          description: "Admin only (FR-9.3).",
+          description:
+            "Admin only (FR-9.3). Returns one provider's configuration. " +
+            "The client secret reference is never included.",
           parameters: [oidcKeyParam],
           responses: {
             "200": jsonResponse("The provider", {
@@ -1088,7 +1096,10 @@ export function buildOpenApiDocument(): Json {
         get: {
           operationId: "adminGetSettings",
           summary: "Read the deployment settings",
-          description: "Admin only (FR-9.1).",
+          description:
+            "Admin only (FR-9.1). Returns the deployment settings: name, " +
+            "registration policy, allowed auth methods, default unit system " +
+            "and time zone, fuel volume precision, and session/token TTLs.",
           responses: {
             "200": jsonResponse("The current settings", {
               type: "object",
@@ -1224,12 +1235,14 @@ export function buildOpenApiDocument(): Json {
       "/admin/users/{id}/reactivate": adminAction(
         "adminReactivateUser",
         "Reactivate an account",
-        "Admin only (FR-8.4).",
+        "Admin only (FR-8.4). Clears status and deactivated_at so the user " +
+          "can sign in again. Idempotent if the user is already active.",
       ),
       "/admin/users/{id}/grant-admin": adminAction(
         "adminGrantAdmin",
         "Grant the admin role",
-        "Admin only (FR-8.7).",
+        "Admin only (FR-8.7). Sets the target user's role to admin. " +
+          "Idempotent if they are already an admin.",
       ),
       "/admin/users/{id}/revoke-admin": adminAction(
         "adminRevokeAdmin",
@@ -1267,7 +1280,9 @@ export function buildOpenApiDocument(): Json {
         get: {
           operationId: "getOpenApi",
           summary: "This document",
-          description: "Unauthenticated.",
+          description:
+            "Unauthenticated (FR-19.1). Serves this document as YAML — the " +
+            "same content as the committed openapi.yaml.",
           security: [],
           responses: { "200": emptyResponse("The OpenAPI document, as YAML") },
         },
