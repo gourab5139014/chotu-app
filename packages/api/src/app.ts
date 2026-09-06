@@ -11,6 +11,7 @@ import { logging } from "./middleware/logging";
 import { requestId } from "./middleware/request-id";
 import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
+import { entryRoutes } from "./routes/entries";
 import { identityRoutes } from "./routes/identities";
 import { invitationRoutes } from "./routes/invitations";
 import { oidcAdminRoutes } from "./routes/oidc-admin";
@@ -57,6 +58,7 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
   app.route("/auth/oidc", oidcRoutes(deps));
   app.route("/identities", identityRoutes(deps));
   app.route("/vehicles", vehicleRoutes(deps));
+  app.route("/", entryRoutes(deps));
   app.route("/invitations", invitationRoutes(deps));
   app.route("/", registerRoutes(deps));
 

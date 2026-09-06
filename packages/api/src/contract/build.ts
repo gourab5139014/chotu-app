@@ -9,6 +9,7 @@ import {
   AdminUpdateSettingsBody,
 } from "../routes/admin";
 import { ChangePasswordBody, SignInBody } from "../routes/auth";
+import { EntryCreateBody, EntryUpdateBody } from "../routes/entries";
 import { VehicleCreateBody, VehicleUpdateBody } from "../routes/vehicles";
 import { InvitationAcceptBody } from "../routes/invitations";
 import {
@@ -297,14 +298,183 @@ export function buildOpenApiDocument(): Json {
           operationId: "deleteVehicle",
           summary: "Delete a vehicle",
           description:
-            "Requires authentication (FR-11.5). A `cascade` flag is reserved " +
-            "for when a vehicle has fuel entries (slice 9); today a vehicle " +
-            "can never have any, so delete always succeeds.",
-          parameters: [idParam],
+            "Requires authentication (FR-11.5). A vehicle with fuel entries " +
+            "needs `?cascade=true`, which deletes the entries first.",
+          parameters: [
+            idParam,
+            {
+              name: "cascade",
+              in: "query",
+              required: false,
+              schema: { type: "boolean", default: false },
+            },
+          ],
           responses: {
             "204": emptyResponse("Deleted"),
             "401": errorResponse("Not authenticated"),
             "404": errorResponse("No such vehicle for this user"),
+            "409": errorResponse("The vehicle has fuel entries; retry with cascade"),
+          },
+        },
+      },
+      "/vehicles/{vehicleId}/entries": {
+        get: {
+          operationId: "listFuelEntries",
+          summary: "List a vehicle's fuel entries",
+          description:
+            "Requires authentication (FR-12.2, FR-14). Ordered " +
+            "entry_date desc, then created_at desc. `from`/`to` filter by " +
+            "entry date (inclusive). Pagination is a keyset cursor, not an " +
+            "offset — stable under inserts and deletes. The response echoes " +
+            "the applied filter, order, and page size.",
+          parameters: [
+            {
+              name: "vehicleId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              schema: { type: "integer", minimum: 1, maximum: 200, default: 50 },
+            },
+            {
+              name: "from",
+              in: "query",
+              required: false,
+              schema: { type: "string", format: "date" },
+            },
+            {
+              name: "to",
+              in: "query",
+              required: false,
+              schema: { type: "string", format: "date" },
+            },
+            {
+              name: "cursor",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": jsonResponse("A page of entries", {
+              type: "object",
+              required: ["entries", "page"],
+              properties: {
+                entries: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/FuelEntry" },
+                },
+                page: {
+                  type: "object",
+                  required: ["limit", "order", "filter", "nextCursor"],
+                  properties: {
+                    limit: { type: "integer" },
+                    order: { type: "string" },
+                    filter: {
+                      type: "object",
+                      required: ["from", "to"],
+                      properties: {
+                        from: { type: ["string", "null"], format: "date" },
+                        to: { type: ["string", "null"], format: "date" },
+                      },
+                    },
+                    nextCursor: {
+                      type: ["string", "null"],
+                      description: "Pass as ?cursor= for the next page; null at the end",
+                    },
+                  },
+                },
+              },
+            }),
+            "400": errorResponse("Bad limit, date, or cursor"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such vehicle for this user"),
+          },
+        },
+        post: {
+          operationId: "createFuelEntry",
+          summary: "Add a fuel entry to a vehicle",
+          description:
+            "Requires authentication (FR-12.1). odometer / volume / totalCost " +
+            "are in the caller's unit system and stored as canonical " +
+            "integers. The vehicle must be owned by the caller and not " +
+            "archived.",
+          parameters: [
+            {
+              name: "vehicleId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          requestBody: jsonBody(bodySchema(EntryCreateBody)),
+          responses: {
+            "201": jsonResponse("The new entry", {
+              type: "object",
+              required: ["entry"],
+              properties: { entry: { $ref: "#/components/schemas/FuelEntry" } },
+            }),
+            "400": errorResponse("Malformed body"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such vehicle for this user"),
+            "409": errorResponse("The vehicle is archived (INV-3)"),
+            "422": errorResponse(
+              "Odometer would decrease (INV-2) or the date is too far ahead (INV-4)",
+            ),
+          },
+        },
+      },
+      "/entries/{id}": {
+        get: {
+          operationId: "getFuelEntry",
+          summary: "Get one fuel entry",
+          description:
+            "Requires authentication. An entry the caller does not own " +
+            "(through the vehicle chain) is 404 (FR-12.6).",
+          parameters: [idParam],
+          responses: {
+            "200": jsonResponse("The entry", {
+              type: "object",
+              required: ["entry"],
+              properties: { entry: { $ref: "#/components/schemas/FuelEntry" } },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such entry for this user"),
+          },
+        },
+        patch: {
+          operationId: "updateFuelEntry",
+          summary: "Update a fuel entry",
+          description:
+            "Requires authentication (FR-12.4). The invariant checks re-run.",
+          parameters: [idParam],
+          requestBody: jsonBody(bodySchema(EntryUpdateBody)),
+          responses: {
+            "200": jsonResponse("The updated entry", {
+              type: "object",
+              required: ["entry"],
+              properties: { entry: { $ref: "#/components/schemas/FuelEntry" } },
+            }),
+            "400": errorResponse("Malformed body or no field to change"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such entry for this user"),
+            "409": errorResponse("The vehicle is archived (INV-3)"),
+            "422": errorResponse("Odometer would decrease (INV-2) or bad date (INV-4)"),
+          },
+        },
+        delete: {
+          operationId: "deleteFuelEntry",
+          summary: "Delete a fuel entry",
+          description: "Requires authentication (FR-12.5).",
+          parameters: [idParam],
+          responses: {
+            "204": emptyResponse("Deleted"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such entry for this user"),
           },
         },
       },
@@ -1094,6 +1264,58 @@ export function buildOpenApiDocument(): Json {
             fuelVolumePrecision: { type: "integer", minimum: 1, maximum: 3 },
             sessionTtlSeconds: { type: "integer", minimum: 60 },
             apiTokenTtlSeconds: { type: ["integer", "null"], minimum: 60 },
+          },
+        },
+        FuelEntry: {
+          type: "object",
+          required: [
+            "id",
+            "vehicleId",
+            "entryDate",
+            "isFullTank",
+            "notes",
+            "currencyCode",
+            "odometerMiE3",
+            "volumeGalE3",
+            "totalCostUsdCents",
+            "unitSystem",
+            "odometer",
+            "volume",
+            "totalCost",
+            "totalCostFormatted",
+            "pricePerVolume",
+            "sourceUnitSystem",
+            "createdAt",
+            "updatedAt",
+          ],
+          properties: {
+            id: { type: "string" },
+            vehicleId: { type: "string" },
+            entryDate: { type: "string", format: "date" },
+            isFullTank: { type: "boolean" },
+            notes: { type: ["string", "null"] },
+            currencyCode: { type: "string", const: "USD" },
+            odometerMiE3: {
+              type: "integer",
+              description: "Canonical: thousandths of a mile (D-1)",
+            },
+            volumeGalE3: {
+              type: "integer",
+              description: "Canonical: thousandths of a US gallon (D-1)",
+            },
+            totalCostUsdCents: { type: "integer", description: "Canonical: USD cents" },
+            unitSystem: { type: "string", enum: ["imperial", "metric"] },
+            odometer: { type: "number", description: "Display projection (FR-15.3)" },
+            volume: { type: "number" },
+            totalCost: { type: "number" },
+            totalCostFormatted: { type: "string" },
+            pricePerVolume: {
+              type: ["number", "null"],
+              description: "Derived price per display volume unit (FR-15.6)",
+            },
+            sourceUnitSystem: { type: "string", enum: ["imperial", "metric"] },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
           },
         },
         Vehicle: {

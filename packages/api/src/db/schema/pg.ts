@@ -302,3 +302,40 @@ export const vehicle = pgTable(
     ),
   ],
 );
+
+export const fuelEntry = pgTable(
+  "fuel_entry",
+  {
+    id: f.uuidPk().pg,
+    vehicleId: f
+      .uuidRef("vehicle_id")
+      .pg.notNull()
+      .references(() => vehicle.id, { onDelete: "restrict" }),
+    entryDate: f.dateOnly("entry_date").pg.notNull(),
+    odometerMiE3: f.bigintNum("odometer_mi_e3").pg.notNull(),
+    volumeGalE3: f.bigintNum("volume_gal_e3").pg.notNull(),
+    totalCostUsdCents: f.bigintNum("total_cost_usd_cents").pg.notNull(),
+    currencyCode: f.text("currency_code").pg.notNull(),
+    isFullTank: f.bool("is_full_tank").pg.notNull().default(true),
+    notes: f.text("notes").pg,
+    sourceUnitSystem: f.text("source_unit_system").pg.notNull(),
+    sourcePayload: f.json("source_payload").pg.notNull(),
+    createdAt: f.timestamptz("created_at").pg.notNull(),
+    updatedAt: f.timestamptz("updated_at").pg.notNull(),
+  },
+  (t) => [
+    index("fuel_entry_history_ix").on(
+      t.vehicleId,
+      sql`${t.entryDate} desc`,
+      sql`${t.createdAt} desc`,
+    ),
+    check("fuel_entry_odometer_ck", sql`${t.odometerMiE3} >= 0`),
+    check("fuel_entry_volume_ck", sql`${t.volumeGalE3} > 0`),
+    check("fuel_entry_cost_ck", sql`${t.totalCostUsdCents} >= 0`),
+    check("fuel_entry_currency_ck", sql`${t.currencyCode} ~ '^[A-Z]{3}$'`),
+    check(
+      "fuel_entry_source_unit_ck",
+      sql`${t.sourceUnitSystem} in ('imperial', 'metric')`,
+    ),
+  ],
+);

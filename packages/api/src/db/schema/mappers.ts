@@ -13,6 +13,7 @@ import type {
   ApiTokenRow,
   AuditLogRow,
   DeploymentSettingsRow,
+  FuelEntryRow,
   IdentityRow,
   InvitationRow,
   OidcLoginRow,
@@ -119,6 +120,11 @@ const VEHICLE: TableMap = {
   instants: ["archivedAt", "createdAt", "updatedAt"],
   safeInts: ["initialOdometerMiE3"],
 };
+const FUEL_ENTRY: TableMap = {
+  // entryDate is a calendar-date string on both dialects — not an instant.
+  instants: ["createdAt", "updatedAt"],
+  safeInts: ["odometerMiE3", "volumeGalE3", "totalCostUsdCents"],
+};
 
 export const mappers = {
   schemaMeta: {
@@ -174,6 +180,11 @@ export const mappers = {
   vehicle: {
     toDomain: (r: Raw) => rowToDomain<VehicleRow>(r, VEHICLE),
     toRow: (d: Partial<VehicleRow>, a: Adapter) => domainToRow(d, VEHICLE, a),
+  },
+  fuelEntry: {
+    toDomain: (r: Raw) => rowToDomain<FuelEntryRow>(r, FUEL_ENTRY),
+    toRow: (d: Partial<FuelEntryRow>, a: Adapter) =>
+      domainToRow(d, FUEL_ENTRY, a),
   },
 } as const;
 

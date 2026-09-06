@@ -551,4 +551,96 @@ describeEachAdapter("repositories", (ctx) => {
       ).rejects.toThrow();
     });
   });
+
+  describe("fuelEntries", () => {
+    let vehicleId: string;
+    beforeEach(async () => {
+      const uid = (await ctx().repos.users.create(newUser())).id;
+      vehicleId = (
+        await ctx().repos.vehicles.create({
+          id: randomUUID(),
+          userId: uid,
+          name: "Test Car",
+          make: null,
+          model: null,
+          year: null,
+          fuelType: null,
+          initialOdometerMiE3: 0,
+        })
+      ).id;
+    });
+
+    function newEntry(over: Record<string, unknown> = {}) {
+      return {
+        id: randomUUID(),
+        vehicleId,
+        entryDate: "2026-01-15",
+        odometerMiE3: 10_000_000,
+        volumeGalE3: 12_000,
+        totalCostUsdCents: 4500,
+        currencyCode: "USD",
+        isFullTank: true,
+        notes: null,
+        sourceUnitSystem: "imperial" as const,
+        sourcePayload: { odometer: 10000, volume: 12, totalCost: 45 },
+        ...over,
+      };
+    }
+
+    it("create / findById / update / delete", async () => {
+      const { fuelEntries } = ctx().repos;
+      const row = await fuelEntries.create(newEntry());
+      expect(row.volumeGalE3).toBe(12_000);
+      expect(row.sourcePayload).toEqual({
+        odometer: 10000,
+        volume: 12,
+        totalCost: 45,
+      });
+
+      const found = await fuelEntries.findById(row.id);
+      expect(found?.entryDate).toBe("2026-01-15");
+      expect(found?.isFullTank).toBe(true);
+
+      const updated = await fuelEntries.update(row.id, { notes: "topped off" });
+      expect(updated.notes).toBe("topped off");
+
+      await fuelEntries.delete(row.id);
+      expect(await fuelEntries.findById(row.id)).toBeNull();
+    });
+
+    it("rejects a non-positive volume at the DB (CHECK)", async () => {
+      const { fuelEntries } = ctx().repos;
+      await expect(
+        fuelEntries.create(newEntry({ volumeGalE3: 0 })),
+      ).rejects.toThrow();
+    });
+
+    it("listForVehicleOrdered returns entries by (entry_date, created_at, id) asc", async () => {
+      const { fuelEntries } = ctx().repos;
+      await fuelEntries.create(newEntry({ entryDate: "2026-02-01", odometerMiE3: 20_000_000 }));
+      await fuelEntries.create(newEntry({ entryDate: "2026-01-01", odometerMiE3: 5_000_000 }));
+      await fuelEntries.create(newEntry({ entryDate: "2026-01-20", odometerMiE3: 12_000_000 }));
+
+      const ordered = await fuelEntries.listForVehicleOrdered(vehicleId);
+      expect(ordered.map((e) => e.entryDate)).toEqual([
+        "2026-01-01",
+        "2026-01-20",
+        "2026-02-01",
+      ]);
+      expect(await fuelEntries.countForVehicle(vehicleId)).toBe(3);
+    });
+
+    it("listForVehicle honours a date range and descending order", async () => {
+      const { fuelEntries } = ctx().repos;
+      for (const d of ["2026-01-05", "2026-01-15", "2026-01-25", "2026-02-05"]) {
+        await fuelEntries.create(newEntry({ entryDate: d }));
+      }
+      const page = await fuelEntries.listForVehicle(vehicleId, {
+        from: "2026-01-10",
+        to: "2026-01-31",
+        limit: 10,
+      });
+      expect(page.map((e) => e.entryDate)).toEqual(["2026-01-25", "2026-01-15"]);
+    });
+  });
 });

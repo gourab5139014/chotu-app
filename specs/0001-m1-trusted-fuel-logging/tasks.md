@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T8.3 (slice 8 complete)
-- **Next task:** T9a.1
+- **Last completed task:** T9c.2 (slice 9 complete)
+- **Next task:** T10.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -274,40 +274,40 @@ pause with almost no rework.
 
 ## Slice 9a — Fuel entries core
 
-- [ ] **T9a.1** `fuel_entry` table + `FuelEntryRepo` (both dialects); index
+- [x] **T9a.1** `fuel_entry` table + `FuelEntryRepo` (both dialects); index
   `(vehicle_id, entry_date desc, created_at desc)`; FK `on delete restrict`;
   per-row `CHECK`s.
   *done when:* `drizzle-kit check` green; repo tests pass.
-- [ ] **T9a.2** Create / get / update / delete for an owned, non-archived
+- [x] **T9a.2** Create / get / update / delete for an owned, non-archived
   vehicle; store canonical integers + `source_unit_system` + `source_payload`;
   response carries canonical + display projection (FR-12, FR-15.3).
   *done when:* contract tests pass; a metric create reads back the same display
   value.
-- [ ] **T9a.3** INV-3 (archived vehicle rejects writes) and INV-4 (entry date
+- [x] **T9a.3** INV-3 (archived vehicle rejects writes) and INV-4 (entry date
   ≤ 2 days ahead in the user tz).
   *done when:* both rejections covered with the right codes.
 
 ## Slice 9b — Odometer progression
 
-- [ ] **T9b.1** INV-2: in `uow.run` after `tx.lockVehicle`, read both
+- [x] **T9b.1** INV-2: in `uow.run` after `tx.lockVehicle`, read both
   neighbours in `(entry_date, created_at, id)` order, check non-decreasing and
   the first entry against `vehicle.initial_odometer_mi_e3`; reject
   `odometer_decrease`; allow a tie.
   *done when:* the `odometer-decrease` fixture (adjacent pair + mid-sequence
   back-date) drives passing tests.
-- [ ] **T9b.2** Contention test: concurrent creates on one vehicle — Postgres
+- [x] **T9b.2** Contention test: concurrent creates on one vehicle — Postgres
   real race, SQLite serialisation / `SQLITE_BUSY`.
   *done when:* no run produces a decreasing adjacent pair.
 
 ## Slice 9c — History + journey
 
-- [ ] **T9c.1** List entries: default order `entry_date desc, created_at desc`,
+- [x] **T9c.1** List entries: default order `entry_date desc, created_at desc`,
   date-range filter, cursor pagination with the `(entry_date, created_at, id)`
   tiebreak stable under insert/delete; response states filter, order, page size
   (FR-14).
   *done when:* a pagination test inserts and deletes mid-scroll and never skips
   or repeats a row.
-- [ ] **T9c.2** AC-5 journey suite over a real socket: invite → accept → sign in
+- [x] **T9c.2** AC-5 journey suite over a real socket: invite → accept → sign in
   → add vehicle → add fill-up → correct entry, bearer only, no DB access.
   *done when:* the journey test passes against both adapters.
 

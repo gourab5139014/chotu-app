@@ -7,9 +7,18 @@ import type { DbHandle } from "../../src/db/index";
 import { clean, type CleanFixture } from "../fixtures/clean";
 import { invite, type InviteFixture } from "../fixtures/invite";
 import { lastAdmin, type LastAdminFixture } from "../fixtures/last-admin";
+import {
+  odometerDecrease,
+  type OdometerDecreaseFixture,
+} from "../fixtures/odometer-decrease";
 
-export { clean, invite, lastAdmin };
-export type { CleanFixture, InviteFixture, LastAdminFixture };
+export { clean, invite, lastAdmin, odometerDecrease };
+export type {
+  CleanFixture,
+  InviteFixture,
+  LastAdminFixture,
+  OdometerDecreaseFixture,
+};
 
 /**
  * Seed a fixture into a migrated database with the full-privilege test
@@ -73,4 +82,31 @@ export async function loadInvite(handle: DbHandle): Promise<InviteFixture> {
     await db.insert(s.invitation).values(mappers.invitation.toRow(inv, a));
   }
   return invite;
+}
+
+/**
+ * Seed the `odometer-decrease` fixture directly (the API would reject the
+ * entries). One vehicle whose stored sequence already violates INV-2.
+ */
+export async function loadOdometerDecrease(
+  handle: DbHandle,
+): Promise<OdometerDecreaseFixture> {
+  const db: any = handle.db;
+  const a = handle.dialect;
+  const s: typeof sqliteSchema =
+    a === "postgres"
+      ? (pgSchema as unknown as typeof sqliteSchema)
+      : sqliteSchema;
+
+  await db
+    .insert(s.deploymentSettings)
+    .values(mappers.deploymentSettings.toRow(odometerDecrease.settings, a));
+  await db.insert(s.user).values(mappers.user.toRow(odometerDecrease.user, a));
+  await db
+    .insert(s.vehicle)
+    .values(mappers.vehicle.toRow(odometerDecrease.vehicle, a));
+  for (const e of odometerDecrease.entries) {
+    await db.insert(s.fuelEntry).values(mappers.fuelEntry.toRow(e, a));
+  }
+  return odometerDecrease;
 }

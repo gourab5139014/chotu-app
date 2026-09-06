@@ -308,3 +308,43 @@ export const vehicle = sqliteTable(
     ),
   ],
 );
+
+export const fuelEntry = sqliteTable(
+  "fuel_entry",
+  {
+    id: f.uuidPk().sqlite,
+    vehicleId: f
+      .uuidRef("vehicle_id")
+      .sqlite.notNull()
+      .references(() => vehicle.id, { onDelete: "restrict" }),
+    entryDate: f.dateOnly("entry_date").sqlite.notNull(),
+    odometerMiE3: f.bigintNum("odometer_mi_e3").sqlite.notNull(),
+    volumeGalE3: f.bigintNum("volume_gal_e3").sqlite.notNull(),
+    totalCostUsdCents: f.bigintNum("total_cost_usd_cents").sqlite.notNull(),
+    currencyCode: f.text("currency_code").sqlite.notNull(),
+    isFullTank: f.bool("is_full_tank").sqlite.notNull().default(true),
+    notes: f.text("notes").sqlite,
+    sourceUnitSystem: f.text("source_unit_system").sqlite.notNull(),
+    sourcePayload: f.json("source_payload").sqlite.notNull(),
+    createdAt: f.timestamptz("created_at").sqlite.notNull(),
+    updatedAt: f.timestamptz("updated_at").sqlite.notNull(),
+  },
+  (t) => [
+    index("fuel_entry_history_ix").on(
+      t.vehicleId,
+      sql`${t.entryDate} desc`,
+      sql`${t.createdAt} desc`,
+    ),
+    check("fuel_entry_odometer_ck", sql`${t.odometerMiE3} >= 0`),
+    check("fuel_entry_volume_ck", sql`${t.volumeGalE3} > 0`),
+    check("fuel_entry_cost_ck", sql`${t.totalCostUsdCents} >= 0`),
+    check(
+      "fuel_entry_currency_ck",
+      sql`${t.currencyCode} glob '[A-Z][A-Z][A-Z]'`,
+    ),
+    check(
+      "fuel_entry_source_unit_ck",
+      sql`${t.sourceUnitSystem} in ('imperial', 'metric')`,
+    ),
+  ],
+);

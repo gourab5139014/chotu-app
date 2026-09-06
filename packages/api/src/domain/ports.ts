@@ -18,6 +18,8 @@ import type {
   NewInvitation,
   NewOidcLogin,
   NewOidcProvider,
+  FuelEntryRow,
+  NewFuelEntry,
   NewSession,
   NewUser,
   NewUserToken,
@@ -142,6 +144,39 @@ export interface VehicleRepo {
   delete(id: string): Promise<void>;
 }
 
+export interface FuelEntryListFilter {
+  /** `YYYY-MM-DD`, inclusive. */
+  from?: string;
+  /** `YYYY-MM-DD`, inclusive. */
+  to?: string;
+  limit: number;
+  /**
+   * Exclusive cursor. Returns rows strictly after this one in
+   * `(entry_date desc, created_at desc, id desc)` order (FR-14.2).
+   */
+  cursor?: { entryDate: string; createdAt: Date; id: string };
+}
+
+export interface FuelEntryRepo {
+  create(entry: NewFuelEntry): Promise<FuelEntryRow>;
+  findById(id: string): Promise<FuelEntryRow | null>;
+  update(
+    id: string,
+    patch: Partial<Omit<FuelEntryRow, "id" | "vehicleId" | "createdAt">>,
+  ): Promise<FuelEntryRow>;
+  delete(id: string): Promise<void>;
+  /** Ascending `(entry_date, created_at, id)` — the INV-2 neighbour scan. */
+  listForVehicleOrdered(vehicleId: string): Promise<FuelEntryRow[]>;
+  /** Descending history page: filter + cursor (FR-12.2, FR-14). */
+  listForVehicle(
+    vehicleId: string,
+    filter: FuelEntryListFilter,
+  ): Promise<FuelEntryRow[]>;
+  countForVehicle(vehicleId: string): Promise<number>;
+  /** Remove every entry for a vehicle. Returns how many were deleted. */
+  deleteForVehicle(vehicleId: string): Promise<number>;
+}
+
 export interface AuditRepo {
   /**
    * Append one audit row on the outer connection. When the row must commit or
@@ -171,4 +206,5 @@ export interface Repos {
   readonly oidcLogins: OidcLoginRepo;
   readonly identities: IdentityRepo;
   readonly vehicles: VehicleRepo;
+  readonly fuelEntries: FuelEntryRepo;
 }
