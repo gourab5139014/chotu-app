@@ -54,6 +54,36 @@ export const EntryUpdateBody = z
     path: ["volume"],
   });
 
+/** INV-3: no create or update of an entry on an archived vehicle (FR-13.5). */
+function assertVehicleWritable(vehicle: VehicleRow): void {
+  if (vehicle.archivedAt != null) {
+    throw err.conflict(
+      "This vehicle is archived and does not take fuel entry changes.",
+    );
+  }
+}
+
+/** `YYYY-MM-DD` for "now" in the given IANA zone. */
+function todayInZone(timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/** INV-4: entry_date is at most two days ahead of today in the user's tz (FR-13.4). */
+function assertEntryDateWithinWindow(entryDate: string, timeZone: string): void {
+  const [y, m, d] = todayInZone(timeZone).split("-").map(Number);
+  const max = new Date(Date.UTC(y!, m! - 1, d! + 2)).toISOString().slice(0, 10);
+  if (entryDate > max) {
+    throw err.validation(
+      "Entry date is more than two days ahead of today in your time zone.",
+    );
+  }
+}
+
 /** Canonical values plus the display projection in the caller's units (FR-15.3). */
 function publicEntry(e: FuelEntryRow, unitSystem: UnitSystem, precision: number) {
   const volume = roundVolume(
@@ -132,6 +162,8 @@ export function entryRoutes(deps: AppDeps): Hono<AppHono> {
     const user = c.get("user")!;
     const vehicle = await loadOwnedVehicle(c.req.param("vehicleId"), user.id);
     const body = await parseJson(c, EntryCreateBody);
+    assertVehicleWritable(vehicle);
+    assertEntryDateWithinWindow(body.entryDate, user.timeZone);
     const precision = await precisionForDeployment();
 
     const now = new Date();
@@ -183,8 +215,12 @@ export function entryRoutes(deps: AppDeps): Hono<AppHono> {
   // PATCH /entries/:id (FR-12.4)
   r.patch("/entries/:id", ...guard, async (c) => {
     const user = c.get("user")!;
-    const { entry } = await loadOwnedEntry(c.req.param("id"), user.id);
+    const { entry, vehicle } = await loadOwnedEntry(c.req.param("id"), user.id);
     const body = await parseJson(c, EntryUpdateBody);
+    assertVehicleWritable(vehicle);
+    if (body.entryDate !== undefined) {
+      assertEntryDateWithinWindow(body.entryDate, user.timeZone);
+    }
     const precision = await precisionForDeployment();
 
     const patch: Partial<

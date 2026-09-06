@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T9a.2
-- **Next task:** T9a.3
+- **Last completed task:** T9a.3 (slice 9a complete)
+- **Next task:** T9b.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -283,7 +283,7 @@ pause with almost no rework.
   response carries canonical + display projection (FR-12, FR-15.3).
   *done when:* contract tests pass; a metric create reads back the same display
   value.
-- [ ] **T9a.3** INV-3 (archived vehicle rejects writes) and INV-4 (entry date
+- [x] **T9a.3** INV-3 (archived vehicle rejects writes) and INV-4 (entry date
   ≤ 2 days ahead in the user tz).
   *done when:* both rejections covered with the right codes.
 

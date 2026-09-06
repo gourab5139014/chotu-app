@@ -177,6 +177,56 @@ describe("/entries", () => {
     expect((await t.app.request(`/entries/${id}`, { headers })).status).toBe(404);
   });
 
+  it("rejects a create or update on an archived vehicle (INV-3, 409)", async () => {
+    const created = await createEntry({
+      entryDate: "2026-01-15",
+      odometer: 100,
+      volume: 10,
+      totalCost: 30,
+    });
+    const entryId = ((await created.json()) as { entry: { id: string } }).entry.id;
+
+    await t.app.request(`/vehicles/${vehicleId}/archive`, {
+      method: "POST",
+      headers,
+    });
+
+    const create409 = await createEntry({
+      entryDate: "2026-01-16",
+      odometer: 200,
+      volume: 10,
+      totalCost: 30,
+    });
+    expect(create409.status).toBe(409);
+
+    const patch409 = await t.app.request(`/entries/${entryId}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ notes: "cannot" }),
+    });
+    expect(patch409.status).toBe(409);
+  });
+
+  it("rejects an entry date more than two days ahead (INV-4, 400)", async () => {
+    const far = await createEntry({
+      entryDate: "2099-01-01",
+      odometer: 1,
+      volume: 1,
+      totalCost: 1,
+    });
+    expect(far.status).toBe(400);
+
+    // Tomorrow in UTC is within the two-day window in any timezone.
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const ok = await createEntry({
+      entryDate: tomorrow,
+      odometer: 2,
+      volume: 1,
+      totalCost: 1,
+    });
+    expect(ok.status).toBe(201);
+  });
+
   it("vehicle delete needs ?cascade=true once entries exist (FR-11.5)", async () => {
     await createEntry({
       entryDate: "2026-01-15",
