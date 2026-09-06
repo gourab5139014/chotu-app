@@ -1,0 +1,202 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createSession } from "../../src/auth/session";
+import { seedDeployment } from "../../src/db/bootstrap";
+import { newId } from "../../src/domain/id";
+import type { NewUser } from "../../src/db/schema/types";
+import { makeTestApp, type TestApp } from "../support/app";
+
+function regularUser(over: Partial<NewUser> = {}): NewUser {
+  return {
+    id: newId(),
+    email: `u-${Math.random().toString(36).slice(2)}@x.com`,
+    emailVerifiedAt: new Date(),
+    displayName: "Regular",
+    role: "user",
+    status: "active",
+    passwordHash: null,
+    mustChangePassword: false,
+    unitSystem: "imperial",
+    currencyCode: "USD",
+    timeZone: "America/New_York",
+    deactivatedAt: null,
+    ...over,
+  };
+}
+
+async function headersFor(t: TestApp, userId: string) {
+  const { token } = await createSession(t.handle, userId, 3600);
+  return { authorization: `Bearer ${token}`, "content-type": "application/json" };
+}
+
+describe("/entries", () => {
+  let t: TestApp;
+  let headers: Record<string, string>;
+  let vehicleId: string;
+
+  beforeEach(async () => {
+    t = makeTestApp();
+    await seedDeployment(t.handle, {
+      admin: { email: "root@x.com", password: "password12345" },
+    });
+    const u = await t.repos.users.create(regularUser({ email: "u@x.com" }));
+    headers = await headersFor(t, u.id);
+    const created = await t.app.request("/vehicles", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: "Car", initialOdometer: 0 }),
+    });
+    vehicleId = ((await created.json()) as { vehicle: { id: string } }).vehicle.id;
+  });
+  afterEach(() => t.cleanup());
+
+  const createEntry = (body: unknown, h = headers, vid = vehicleId) =>
+    t.app.request(`/vehicles/${vid}/entries`, {
+      method: "POST",
+      headers: h,
+      body: JSON.stringify(body),
+    });
+
+  it("requires auth", async () => {
+    expect(
+      (await t.app.request(`/vehicles/${vehicleId}/entries`, { method: "POST" }))
+        .status,
+    ).toBe(401);
+  });
+
+  it("creates an entry, storing canonical integers and a display projection", async () => {
+    const res = await createEntry({
+      entryDate: "2026-01-15",
+      odometer: 12345.5,
+      volume: 11.2,
+      totalCost: 42.5,
+      isFullTank: true,
+      notes: "regular",
+    });
+    expect(res.status).toBe(201);
+    const { entry } = (await res.json()) as {
+      entry: Record<string, unknown>;
+    };
+    expect(entry["odometerMiE3"]).toBe(12_345_500);
+    expect(entry["volumeGalE3"]).toBe(11_200);
+    expect(entry["totalCostUsdCents"]).toBe(4250);
+    expect(entry["odometer"]).toBe(12345.5);
+    expect(entry["volume"]).toBe(11.2);
+    expect(entry["totalCost"]).toBe(42.5);
+    expect(entry["totalCostFormatted"]).toBe("42.50");
+    expect(entry["sourceUnitSystem"]).toBe("imperial");
+  });
+
+  it("a metric create reads back the same display value (T9a.2)", async () => {
+    const metric = await t.repos.users.create(
+      regularUser({ email: "metric@x.com", unitSystem: "metric" }),
+    );
+    const mHeaders = await headersFor(t, metric.id);
+    const mVehicle = await t.app.request("/vehicles", {
+      method: "POST",
+      headers: mHeaders,
+      body: JSON.stringify({ name: "Golf", initialOdometer: 0 }),
+    });
+    const mVid = ((await mVehicle.json()) as { vehicle: { id: string } }).vehicle
+      .id;
+
+    const created = await createEntry(
+      { entryDate: "2026-01-15", odometer: 200000, volume: 45.5, totalCost: 80 },
+      mHeaders,
+      mVid,
+    );
+    const createdBody = (await created.json()) as {
+      entry: { id: string; volume: number };
+    };
+    expect(createdBody.entry.volume).toBeCloseTo(45.5, 2);
+
+    const got = await t.app.request(`/entries/${createdBody.entry.id}`, {
+      headers: mHeaders,
+    });
+    const gotBody = (await got.json()) as { entry: { volume: number } };
+    expect(gotBody.entry.volume).toBe(createdBody.entry.volume);
+  });
+
+  it("rejects a create against a vehicle the caller does not own (404)", async () => {
+    const other = await t.repos.users.create(regularUser({ email: "other@x.com" }));
+    const oHeaders = await headersFor(t, other.id);
+    const res = await createEntry(
+      { entryDate: "2026-01-15", odometer: 1, volume: 1, totalCost: 1 },
+      oHeaders,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects a non-positive volume (400)", async () => {
+    const res = await createEntry({
+      entryDate: "2026-01-15",
+      odometer: 1,
+      volume: 0,
+      totalCost: 1,
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("gets, updates, and deletes an entry; wrong owner is 404", async () => {
+    const created = await createEntry({
+      entryDate: "2026-01-15",
+      odometer: 100,
+      volume: 10,
+      totalCost: 30,
+    });
+    const id = ((await created.json()) as { entry: { id: string } }).entry.id;
+
+    const other = await t.repos.users.create(regularUser({ email: "o2@x.com" }));
+    const oHeaders = await headersFor(t, other.id);
+    expect(
+      (await t.app.request(`/entries/${id}`, { headers: oHeaders })).status,
+    ).toBe(404);
+
+    const patched = await t.app.request(`/entries/${id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ totalCost: 33.33, notes: "corrected" }),
+    });
+    expect(patched.status).toBe(200);
+    const { entry } = (await patched.json()) as {
+      entry: { totalCostUsdCents: number; notes: string };
+    };
+    expect(entry.totalCostUsdCents).toBe(3333);
+    expect(entry.notes).toBe("corrected");
+
+    const emptyPatch = await t.app.request(`/entries/${id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({}),
+    });
+    expect(emptyPatch.status).toBe(400);
+
+    expect(
+      (await t.app.request(`/entries/${id}`, { method: "DELETE", headers })).status,
+    ).toBe(204);
+    expect((await t.app.request(`/entries/${id}`, { headers })).status).toBe(404);
+  });
+
+  it("vehicle delete needs ?cascade=true once entries exist (FR-11.5)", async () => {
+    await createEntry({
+      entryDate: "2026-01-15",
+      odometer: 1,
+      volume: 1,
+      totalCost: 1,
+    });
+
+    const noFlag = await t.app.request(`/vehicles/${vehicleId}`, {
+      method: "DELETE",
+      headers,
+    });
+    expect(noFlag.status).toBe(409);
+
+    const withFlag = await t.app.request(`/vehicles/${vehicleId}?cascade=true`, {
+      method: "DELETE",
+      headers,
+    });
+    expect(withFlag.status).toBe(204);
+    expect(await t.repos.fuelEntries.countForVehicle(vehicleId)).toBe(0);
+    expect(await t.repos.vehicles.findById(vehicleId)).toBeNull();
+  });
+});

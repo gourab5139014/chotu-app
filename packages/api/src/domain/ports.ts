@@ -173,6 +173,8 @@ export interface FuelEntryRepo {
     filter: FuelEntryListFilter,
   ): Promise<FuelEntryRow[]>;
   countForVehicle(vehicleId: string): Promise<number>;
+  /** Remove every entry for a vehicle. Returns how many were deleted. */
+  deleteForVehicle(vehicleId: string): Promise<number>;
 }
 
 export interface AuditRepo {

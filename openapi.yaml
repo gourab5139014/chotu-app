@@ -406,9 +406,232 @@ paths:
     delete:
       operationId: deleteVehicle
       summary: Delete a vehicle
-      description: Requires authentication (FR-11.5). A `cascade` flag is reserved for
-        when a vehicle has fuel entries (slice 9); today a vehicle can never
-        have any, so delete always succeeds.
+      description: Requires authentication (FR-11.5). A vehicle with fuel entries
+        needs `?cascade=true`, which deletes the entries first.
+      parameters:
+        - *a1
+        - name: cascade
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such vehicle for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The vehicle has fuel entries; retry with cascade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /vehicles/{vehicleId}/entries:
+    post:
+      operationId: createFuelEntry
+      summary: Add a fuel entry to a vehicle
+      description: Requires authentication (FR-12.1). odometer / volume / totalCost
+        are in the caller's unit system and stored as canonical integers. The
+        vehicle must be owned by the caller and not archived.
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entryDate:
+                  type: string
+                  pattern: ^\d{4}-\d{2}-\d{2}$
+                odometer:
+                  type: number
+                  minimum: 0
+                volume:
+                  type: number
+                totalCost:
+                  type: number
+                  minimum: 0
+                isFullTank:
+                  type: boolean
+                  default: true
+                notes:
+                  type: string
+                  maxLength: 1000
+                  nullable: true
+              required:
+                - entryDate
+                - odometer
+                - volume
+                - totalCost
+              additionalProperties: false
+      responses:
+        "201":
+          description: The new entry
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - entry
+                properties:
+                  entry:
+                    $ref: "#/components/schemas/FuelEntry"
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such vehicle for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The vehicle is archived (INV-3)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Odometer would decrease (INV-2) or the date is too far ahead (INV-4)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /entries/{id}:
+    get:
+      operationId: getFuelEntry
+      summary: Get one fuel entry
+      description: Requires authentication. An entry the caller does not own (through
+        the vehicle chain) is 404 (FR-12.6).
+      parameters:
+        - *a1
+      responses:
+        "200":
+          description: The entry
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - entry
+                properties:
+                  entry:
+                    $ref: "#/components/schemas/FuelEntry"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such entry for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateFuelEntry
+      summary: Update a fuel entry
+      description: Requires authentication (FR-12.4). The invariant checks re-run.
+      parameters:
+        - *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entryDate:
+                  type: string
+                  pattern: ^\d{4}-\d{2}-\d{2}$
+                odometer:
+                  type: number
+                  minimum: 0
+                volume:
+                  type: number
+                totalCost:
+                  type: number
+                  minimum: 0
+                isFullTank:
+                  type: boolean
+                notes:
+                  type: string
+                  maxLength: 1000
+                  nullable: true
+              additionalProperties: false
+      responses:
+        "200":
+          description: The updated entry
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - entry
+                properties:
+                  entry:
+                    $ref: "#/components/schemas/FuelEntry"
+        "400":
+          description: Malformed body or no field to change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such entry for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The vehicle is archived (INV-3)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Odometer would decrease (INV-2) or bad date (INV-4)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteFuelEntry
+      summary: Delete a fuel entry
+      description: Requires authentication (FR-12.5).
       parameters:
         - *a1
       responses:
@@ -421,7 +644,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: No such vehicle for this user
+          description: No such entry for this user
           content:
             application/json:
               schema:
@@ -2119,6 +2342,83 @@ components:
             - integer
             - "null"
           minimum: 60
+    FuelEntry:
+      type: object
+      required:
+        - id
+        - vehicleId
+        - entryDate
+        - isFullTank
+        - notes
+        - currencyCode
+        - odometerMiE3
+        - volumeGalE3
+        - totalCostUsdCents
+        - unitSystem
+        - odometer
+        - volume
+        - totalCost
+        - totalCostFormatted
+        - pricePerVolume
+        - sourceUnitSystem
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        vehicleId:
+          type: string
+        entryDate:
+          type: string
+          format: date
+        isFullTank:
+          type: boolean
+        notes:
+          type:
+            - string
+            - "null"
+        currencyCode:
+          type: string
+          const: USD
+        odometerMiE3:
+          type: integer
+          description: "Canonical: thousandths of a mile (D-1)"
+        volumeGalE3:
+          type: integer
+          description: "Canonical: thousandths of a US gallon (D-1)"
+        totalCostUsdCents:
+          type: integer
+          description: "Canonical: USD cents"
+        unitSystem:
+          type: string
+          enum:
+            - imperial
+            - metric
+        odometer:
+          type: number
+          description: Display projection (FR-15.3)
+        volume:
+          type: number
+        totalCost:
+          type: number
+        totalCostFormatted:
+          type: string
+        pricePerVolume:
+          type:
+            - number
+            - "null"
+          description: Derived price per display volume unit (FR-15.6)
+        sourceUnitSystem:
+          type: string
+          enum:
+            - imperial
+            - metric
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     Vehicle:
       type: object
       required:

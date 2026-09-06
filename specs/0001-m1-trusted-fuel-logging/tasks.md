@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T9a.1
-- **Next task:** T9a.2
+- **Last completed task:** T9a.2
+- **Next task:** T9a.3
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -278,7 +278,7 @@ pause with almost no rework.
   `(vehicle_id, entry_date desc, created_at desc)`; FK `on delete restrict`;
   per-row `CHECK`s.
   *done when:* `drizzle-kit check` green; repo tests pass.
-- [ ] **T9a.2** Create / get / update / delete for an owned, non-archived
+- [x] **T9a.2** Create / get / update / delete for an owned, non-archived
   vehicle; store canonical integers + `source_unit_system` + `source_payload`;
   response carries canonical + display projection (FR-12, FR-15.3).
   *done when:* contract tests pass; a metric create reads back the same display

@@ -167,12 +167,19 @@ export function vehicleRoutes(deps: AppDeps): Hono<AppHono> {
     return c.json({ vehicle: publicVehicle(updated, user.unitSystem) });
   });
 
-  // DELETE /vehicles/:id — cascade flag reserved for FR-11.5 (fuel_entry
-  // lands in slice 9; nothing can reference a vehicle yet, so delete is
-  // unconditional today, and ?cascade is accepted but not yet meaningful).
+  // DELETE /vehicles/:id — a vehicle with fuel entries needs ?cascade=true,
+  // which removes the entries first (FR-11.5).
   r.delete("/:id", async (c) => {
     const user = c.get("user")!;
     const v = await loadOwned(c.req.param("id"), user.id);
+    const entryCount = await deps.repos.fuelEntries.countForVehicle(v.id);
+    const cascade = c.req.query("cascade") === "true";
+    if (entryCount > 0 && !cascade) {
+      throw err.conflict(
+        "This vehicle has fuel entries. Pass ?cascade=true to delete them too.",
+      );
+    }
+    if (entryCount > 0) await deps.repos.fuelEntries.deleteForVehicle(v.id);
     await deps.repos.vehicles.delete(v.id);
     return c.body(null, 204);
   });

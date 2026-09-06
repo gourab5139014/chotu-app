@@ -625,6 +625,12 @@ export function makeRepos(handle: DbHandle): Repos {
           .where(eq(s.fuelEntry.vehicleId, vehicleId));
         return Number(rows[0]?.n ?? 0);
       },
+      async deleteForVehicle(vehicleId) {
+        const rows = await returningAll(
+          db.delete(s.fuelEntry).where(eq(s.fuelEntry.vehicleId, vehicleId)),
+        );
+        return rows.length;
+      },
     },
   };
 }
