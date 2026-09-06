@@ -229,7 +229,7 @@ describe("/invitations/accept rate limit — T6a.3", () => {
   let t: TestApp;
 
   beforeEach(() => {
-    t = makeTestApp({ RATE_LIMIT_INVITE_ACCEPT_PER_MIN_IP: "3" });
+    t = makeTestApp({ RATE_LIMIT_INVITE_ACCEPT_PER_HOUR_IP: "3" });
   });
   afterEach(() => t.cleanup());
 

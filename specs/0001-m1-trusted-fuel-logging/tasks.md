@@ -9,14 +9,12 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T10.3 (slice 10 complete)
-- **Next task:** T11.1
+- **M1 COMPLETE.** Slices 1–11 (T1.1 … T11.5) are done and merged to `main`.
+  `pnpm -w run verify` and full CI green on both dialects; tagged `v0.1.0-m1`.
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
-  per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
-  T1.8; before that, run the commands named in each task.
-- **Resume procedure:** read this header, run `git log --oneline main..HEAD`,
-  run `pnpm -w run verify`; if green, start the **Next task**; if red, finish or
-  revert the last partial task first.
+  per-dialect `drizzle-kit check` + vitest).
+- **Deferred (0002 / M1.5):** the `chotu` CLI beyond bootstrap/token, the SPA,
+  data import + restore, research items R-1/R-2/R-3.
 
 ## Conventions
 
@@ -332,20 +330,20 @@ pause with almost no rework.
 
 ## Slice 11 — Hardening
 
-- [ ] **T11.1** Fill OpenAPI descriptions for LLM callers on every route
+- [x] **T11.1** Fill OpenAPI descriptions for LLM callers on every route
   (FR-19.3); Spectral rule for description length.
   *done when:* Spectral passes with the description rule on.
-- [ ] **T11.2** Isolation-matrix test covers **every** user-scoped route
+- [x] **T11.2** Isolation-matrix test covers **every** user-scoped route
   (vehicles, entries, reconcile, export); audit-delta assertion on **every**
   admin/security action (AC-7, AC-9).
   *done when:* both matrices enumerate the full route list with no gaps.
-- [ ] **T11.3** Confirm every AC-1..AC-12 has a named test; add a
+- [x] **T11.3** Confirm every AC-1..AC-12 has a named test; add a
   `test/support/ac-coverage.test.ts` that asserts the mapping.
   *done when:* the coverage test lists a test id for each AC.
-- [ ] **T11.4** Tune rate-limit thresholds from the spec NFR into config
+- [x] **T11.4** Tune rate-limit thresholds from the spec NFR into config
   defaults; redaction audit over all log call sites.
   *done when:* a log-scan test finds no secret-bearing field logged.
-- [ ] **T11.5** `pnpm -w run verify` and full CI green; tag the slice.
+- [x] **T11.5** `pnpm -w run verify` and full CI green; tag the slice.
   *done when:* CI green on `build/m1`; BUILD STATE marked M1 complete.
 
 ---

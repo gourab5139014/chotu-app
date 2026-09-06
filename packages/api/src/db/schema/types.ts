@@ -11,6 +11,8 @@
  * optional.
  */
 
+import type { AuditAction } from "../../domain/audit-actions";
+
 export type AuthMethod = "password" | "oidc";
 export type RegistrationPolicy = "invite_only" | "open" | "sso_auto";
 export type UnitSystem = "imperial" | "metric";
@@ -214,8 +216,10 @@ export type NewApiToken = Omit<
 >;
 export type NewSession = Omit<SessionRow, "createdAt" | "lastSeenAt">;
 /** `id` is optional here — the repository fills it when absent. */
-export type NewAuditLog = Omit<AuditLogRow, "id" | "createdAt"> & {
+export type NewAuditLog = Omit<AuditLogRow, "id" | "createdAt" | "action"> & {
   id?: string;
+  /** One of the codes in `domain/audit-actions.ts` (AC-9). */
+  action: AuditAction;
 };
 export type NewInvitation = Omit<
   InvitationRow,
