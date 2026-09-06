@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T9c.2 (slice 9 complete)
-- **Next task:** T10.1
+- **Last completed task:** T10.1
+- **Next task:** T10.2
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -313,7 +313,7 @@ pause with almost no rework.
 
 ## Slice 10 — Reconciliation + export
 
-- [ ] **T10.1** `reconcile/` check registry: `duplicate`, `orphaned`,
+- [x] **T10.1** `reconcile/` check registry: `duplicate`, `orphaned`,
   `odometer-tie`, `odometer-decrease`, `missing-field`, `out-of-range`
   (FR-17.3).
   *done when:* each fixture (`duplicate`, `orphaned`, `odometer-decrease`,
