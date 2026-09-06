@@ -43,6 +43,13 @@
       "when": 1788578034220,
       "tag": "0005_unusual_shatterstar",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788712168418,
+      "tag": "0006_lovely_runaways",
+      "breakpoints": true
     }
   ]
 }

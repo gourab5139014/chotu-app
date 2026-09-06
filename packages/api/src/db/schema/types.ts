@@ -167,6 +167,27 @@ export interface VehicleRow {
   updatedAt: Date;
 }
 
+export interface FuelEntryRow {
+  id: string;
+  vehicleId: string;
+  /** Calendar date, `YYYY-MM-DD`. */
+  entryDate: string;
+  /** Thousandths of a mile. Canonical (D-1). */
+  odometerMiE3: number;
+  /** Thousandths of a US gallon. Canonical (D-1). Always > 0. */
+  volumeGalE3: number;
+  /** USD cents. Canonical (D-1). */
+  totalCostUsdCents: number;
+  currencyCode: string;
+  isFullTank: boolean;
+  notes: string | null;
+  sourceUnitSystem: UnitSystem;
+  /** Raw submitted values, kept for audit and export (FR-15.2). */
+  sourcePayload: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface AuditLogRow {
   id: string;
   /** The admin or user who acted. Null for a system action. */
@@ -209,3 +230,4 @@ export type NewVehicle = Omit<
   VehicleRow,
   "createdAt" | "updatedAt" | "archivedAt"
 >;
+export type NewFuelEntry = Omit<FuelEntryRow, "createdAt" | "updatedAt">;

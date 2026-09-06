@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return -- one repo layer over both Drizzle dialects; ports.ts is the typed boundary */
-import { and, desc, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 
 import { err } from "../domain/errors";
 import { newId } from "../domain/id";
@@ -11,10 +11,12 @@ import type {
   ApiTokenRow,
   AuditLogRow,
   DeploymentSettingsRow,
+  FuelEntryRow,
   IdentityRow,
   InvitationRow,
   NewApiToken,
   NewAuditLog,
+  NewFuelEntry,
   NewIdentity,
   NewInvitation,
   NewOidcLogin,
@@ -546,6 +548,84 @@ export function makeRepos(handle: DbHandle): Repos {
         await db.delete(s.vehicle).where(eq(s.vehicle.id, id));
       },
     },
+
+    fuelEntries: {
+      async create(entry: NewFuelEntry) {
+        const ts = now();
+        const row: FuelEntryRow = { ...entry, createdAt: ts, updatedAt: ts };
+        await db.insert(s.fuelEntry).values(mappers.fuelEntry.toRow(row, a));
+        return row;
+      },
+      async findById(id) {
+        const rows = await db
+          .select()
+          .from(s.fuelEntry)
+          .where(eq(s.fuelEntry.id, id))
+          .limit(1);
+        return first<FuelEntryRow>(rows, mappers.fuelEntry.toDomain);
+      },
+      async update(id, patch) {
+        const values = mappers.fuelEntry.toRow({ ...patch, updatedAt: now() }, a);
+        const rows = await returningAll(
+          db.update(s.fuelEntry).set(values).where(eq(s.fuelEntry.id, id)),
+        );
+        const updated = first<FuelEntryRow>(rows, mappers.fuelEntry.toDomain);
+        if (updated == null) throw new Error(`fuel_entry ${id} not found`);
+        return updated;
+      },
+      async delete(id) {
+        await db.delete(s.fuelEntry).where(eq(s.fuelEntry.id, id));
+      },
+      async listForVehicleOrdered(vehicleId) {
+        const rows = await db
+          .select()
+          .from(s.fuelEntry)
+          .where(eq(s.fuelEntry.vehicleId, vehicleId))
+          .orderBy(
+            asc(s.fuelEntry.entryDate),
+            asc(s.fuelEntry.createdAt),
+            asc(s.fuelEntry.id),
+          );
+        return rows.map((r: any) => mappers.fuelEntry.toDomain(r));
+      },
+      async listForVehicle(vehicleId, filter) {
+        const clauses = [eq(s.fuelEntry.vehicleId, vehicleId)];
+        if (filter.from != null) {
+          clauses.push(gte(s.fuelEntry.entryDate, filter.from));
+        }
+        if (filter.to != null) {
+          clauses.push(lte(s.fuelEntry.entryDate, filter.to));
+        }
+        if (filter.cursor != null) {
+          // Strictly "after" the cursor in (entry_date desc, created_at desc,
+          // id desc): a stable keyset, not an offset (FR-14.2). ISO text for
+          // created_at on both dialects — Postgres coerces it to timestamptz,
+          // SQLite stores ISO text and compares it lexically (chronological).
+          const cAt = filter.cursor.createdAt.toISOString();
+          clauses.push(
+            sql`(${s.fuelEntry.entryDate}, ${s.fuelEntry.createdAt}, ${s.fuelEntry.id}) < (${filter.cursor.entryDate}, ${cAt}, ${filter.cursor.id})`,
+          );
+        }
+        const rows = await db
+          .select()
+          .from(s.fuelEntry)
+          .where(and(...clauses))
+          .orderBy(
+            desc(s.fuelEntry.entryDate),
+            desc(s.fuelEntry.createdAt),
+            desc(s.fuelEntry.id),
+          )
+          .limit(filter.limit);
+        return rows.map((r: any) => mappers.fuelEntry.toDomain(r));
+      },
+      async countForVehicle(vehicleId) {
+        const rows = await db
+          .select({ n: sql<number>`count(*)` })
+          .from(s.fuelEntry)
+          .where(eq(s.fuelEntry.vehicleId, vehicleId));
+        return Number(rows[0]?.n ?? 0);
+      },
+    },
   };
 }
 
@@ -562,23 +642,30 @@ export function countActiveAdminsInTx(tx: Tx): number | Promise<number> {
   return Number((tx.db.all(q)[0] as any)?.n ?? 0);
 }
 
-/** Delete a user row on an open transaction. FK cascades take the dependents. */
+/**
+ * Delete a user and everything that hangs off them, in one transaction
+ * (FR-7.3, FR-8.6). `vehicle.user_id` and `fuel_entry.vehicle_id` are ON
+ * DELETE RESTRICT by design, so the order is fixed: fuel entries, then
+ * vehicles, then the user row. Sessions, tokens, invitations, and identities
+ * cascade on the user FK.
+ */
 export function deleteUserInTx(tx: Tx, userId: string): void | Promise<void> {
-  // vehicle.user_id and (from slice 9) fuel_entry.vehicle_id are ON DELETE
-  // RESTRICT (data-model), by design — so the user's vehicles (and, once
-  // fuel_entry exists, their entries first) must be removed explicitly here,
-  // in the same transaction, before the user row (FR-7.3, FR-8.6).
+  const { db, s } = txParts(tx);
+  const vehiclesOfUser = db
+    .select({ id: s.vehicle.id })
+    .from(s.vehicle)
+    .where(eq(s.vehicle.userId, userId));
+  const steps = [
+    () => db.delete(s.fuelEntry).where(inArray(s.fuelEntry.vehicleId, vehiclesOfUser)),
+    () => db.delete(s.vehicle).where(eq(s.vehicle.userId, userId)),
+    () => db.delete(s.user).where(eq(s.user.id, userId)),
+  ];
   if (tx.dialect === "postgres") {
-    return tx.db
-      .delete(pgSchema.vehicle)
-      .where(eq(pgSchema.vehicle.userId, userId))
-      .then(() =>
-        tx.db.delete(pgSchema.user).where(eq(pgSchema.user.id, userId)),
-      )
+    return steps
+      .reduce<Promise<unknown>>((p, step) => p.then(step), Promise.resolve())
       .then(() => undefined);
   }
-  tx.db.delete(sqliteSchema.vehicle).where(eq(sqliteSchema.vehicle.userId, userId)).run();
-  tx.db.delete(sqliteSchema.user).where(eq(sqliteSchema.user.id, userId)).run();
+  for (const step of steps) step().run();
 }
 
 /** Fill `id` and `createdAt` for an audit entry. */
@@ -891,4 +978,53 @@ export function consumeOidcLoginInTx(
   const { db, s, a } = txParts(tx);
   const values = mappers.oidcLogin.toRow({ consumedAt: at }, a);
   return settle(tx, db.update(s.oidcLogin).set(values).where(eq(s.oidcLogin.id, id)));
+}
+
+/** Insert a fully-formed fuel entry row. Run under `uow.run({ vehicleId })`. */
+export function insertFuelEntryInTx(
+  tx: Tx,
+  row: FuelEntryRow,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  return settle(tx, db.insert(s.fuelEntry).values(mappers.fuelEntry.toRow(row, a)));
+}
+
+/** Patch a fuel entry by id. `updatedAt` is set here. */
+export function updateFuelEntryInTx(
+  tx: Tx,
+  id: string,
+  patch: Partial<Omit<FuelEntryRow, "id" | "vehicleId" | "createdAt">>,
+): void | Promise<void> {
+  const { db, s, a } = txParts(tx);
+  const values = mappers.fuelEntry.toRow({ ...patch, updatedAt: new Date() }, a);
+  return settle(tx, db.update(s.fuelEntry).set(values).where(eq(s.fuelEntry.id, id)));
+}
+
+/**
+ * Read a vehicle's entries in ascending `(entry_date, created_at, id)` order
+ * on an open transaction — the INV-2 neighbour scan (T9b), inside the same
+ * `uow.run` that holds the vehicle row lock.
+ */
+export function listVehicleEntriesInTx(
+  tx: Tx,
+  vehicleId: string,
+): FuelEntryRow[] | Promise<FuelEntryRow[]> {
+  const { db, s } = txParts(tx);
+  const q = db
+    .select()
+    .from(s.fuelEntry)
+    .where(eq(s.fuelEntry.vehicleId, vehicleId))
+    .orderBy(asc(s.fuelEntry.entryDate), asc(s.fuelEntry.createdAt), asc(s.fuelEntry.id));
+  if (tx.dialect === "postgres") {
+    return q.then((rows: any[]) =>
+      rows.map((r) => mappers.fuelEntry.toDomain(r)),
+    );
+  }
+  return (q.all() as any[]).map((r) => mappers.fuelEntry.toDomain(r));
+}
+
+/** Delete a fuel entry by id on an open transaction. */
+export function deleteFuelEntryInTx(tx: Tx, id: string): void | Promise<void> {
+  const { db, s } = txParts(tx);
+  return settle(tx, db.delete(s.fuelEntry).where(eq(s.fuelEntry.id, id)));
 }
