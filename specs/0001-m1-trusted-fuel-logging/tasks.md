@@ -9,14 +9,12 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T11.4
-- **Next task:** T11.5
+- **M1 COMPLETE.** Slices 1–11 (T1.1 … T11.5) are done and merged to `main`.
+  `pnpm -w run verify` and full CI green on both dialects; tagged `v0.1.0-m1`.
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
-  per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
-  T1.8; before that, run the commands named in each task.
-- **Resume procedure:** read this header, run `git log --oneline main..HEAD`,
-  run `pnpm -w run verify`; if green, start the **Next task**; if red, finish or
-  revert the last partial task first.
+  per-dialect `drizzle-kit check` + vitest).
+- **Deferred (0002 / M1.5):** the `chotu` CLI beyond bootstrap/token, the SPA,
+  data import + restore, research items R-1/R-2/R-3.
 
 ## Conventions
 
@@ -345,7 +343,7 @@ pause with almost no rework.
 - [x] **T11.4** Tune rate-limit thresholds from the spec NFR into config
   defaults; redaction audit over all log call sites.
   *done when:* a log-scan test finds no secret-bearing field logged.
-- [ ] **T11.5** `pnpm -w run verify` and full CI green; tag the slice.
+- [x] **T11.5** `pnpm -w run verify` and full CI green; tag the slice.
   *done when:* CI green on `build/m1`; BUILD STATE marked M1 complete.
 
 ---
