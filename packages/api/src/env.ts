@@ -43,10 +43,20 @@ export const envSchema = z.object({
   /** Read the client IP from the last X-Forwarded-For hop for rate limiting. */
   TRUSTED_PROXY: boolish.default("false"),
 
-  /** Optional overrides for the draft rate-limit thresholds (requests/window). */
+  /**
+   * Optional overrides for the draft rate-limit thresholds (NFR): sign-in
+   * 10/min/IP + 5/min/account, reset request 3/hour/IP + 3/hour/account,
+   * invite accept 10/hour/IP.
+   */
   RATE_LIMIT_SIGNIN_PER_MIN_IP: z.coerce.number().int().positive().optional(),
   RATE_LIMIT_SIGNIN_PER_MIN_ACCOUNT: z.coerce.number().int().positive().optional(),
-  RATE_LIMIT_INVITE_ACCEPT_PER_MIN_IP: z.coerce
+  RATE_LIMIT_RESET_PER_HOUR_IP: z.coerce.number().int().positive().optional(),
+  RATE_LIMIT_RESET_PER_HOUR_ACCOUNT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional(),
+  RATE_LIMIT_INVITE_ACCEPT_PER_HOUR_IP: z.coerce
     .number()
     .int()
     .positive()

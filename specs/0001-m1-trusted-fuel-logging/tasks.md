@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T11.2
-- **Next task:** T11.3
+- **Last completed task:** T11.4
+- **Next task:** T11.5
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -339,10 +339,10 @@ pause with almost no rework.
   (vehicles, entries, reconcile, export); audit-delta assertion on **every**
   admin/security action (AC-7, AC-9).
   *done when:* both matrices enumerate the full route list with no gaps.
-- [ ] **T11.3** Confirm every AC-1..AC-12 has a named test; add a
+- [x] **T11.3** Confirm every AC-1..AC-12 has a named test; add a
   `test/support/ac-coverage.test.ts` that asserts the mapping.
   *done when:* the coverage test lists a test id for each AC.
-- [ ] **T11.4** Tune rate-limit thresholds from the spec NFR into config
+- [x] **T11.4** Tune rate-limit thresholds from the spec NFR into config
   defaults; redaction audit over all log call sites.
   *done when:* a log-scan test finds no secret-bearing field logged.
 - [ ] **T11.5** `pnpm -w run verify` and full CI green; tag the slice.

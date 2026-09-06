@@ -8,7 +8,12 @@ import {
   AdminDeleteUserBody,
   AdminUpdateSettingsBody,
 } from "../routes/admin";
-import { ChangePasswordBody, SignInBody } from "../routes/auth";
+import {
+  ChangePasswordBody,
+  ResetBody,
+  ResetRequestBody,
+  SignInBody,
+} from "../routes/auth";
 import { EntryCreateBody, EntryUpdateBody } from "../routes/entries";
 import { VehicleCreateBody, VehicleUpdateBody } from "../routes/vehicles";
 import { InvitationAcceptBody } from "../routes/invitations";
@@ -170,6 +175,50 @@ export function buildOpenApiDocument(): Json {
           responses: {
             "204": emptyResponse("Signed out"),
             "401": errorResponse("Not authenticated"),
+          },
+        },
+      },
+      "/auth/reset-request": {
+        post: {
+          operationId: "requestPasswordReset",
+          summary: "Request a password reset for an email",
+          description:
+            "Unauthenticated (FR-4.2). The response is the same whether or " +
+            "not the email exists, to avoid account enumeration. Rate limited " +
+            "per IP and per account. When email is not configured and the " +
+            "account exists, the reset token is returned in the response.",
+          security: [],
+          requestBody: jsonBody(bodySchema(ResetRequestBody)),
+          responses: {
+            "200": jsonResponse("Accepted (always the same shape)", {
+              type: "object",
+              required: ["sent"],
+              properties: {
+                sent: { type: "boolean" },
+                resetToken: { type: "string" },
+                note: { type: "string" },
+              },
+            }),
+            "400": errorResponse("Malformed body"),
+            "429": errorResponse("Rate limited; see Retry-After"),
+          },
+        },
+      },
+      "/auth/reset": {
+        post: {
+          operationId: "completePasswordReset",
+          summary: "Set a new password from a reset or set-password link",
+          description:
+            "Unauthenticated (FR-4.3). Consumes a single-use `reset` or " +
+            "`set_password` token, sets the new password, clears " +
+            "must_change_password, and revokes every session for that user. " +
+            "An invalid, expired, or already-used link is 404.",
+          security: [],
+          requestBody: jsonBody(bodySchema(ResetBody)),
+          responses: {
+            "204": emptyResponse("Password set; all sessions revoked"),
+            "400": errorResponse("Malformed body"),
+            "404": errorResponse("Invalid, expired, or already-used link"),
           },
         },
       },

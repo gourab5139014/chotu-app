@@ -40,13 +40,13 @@ export function invitationRoutes(deps: AppDeps): Hono<AppHono> {
   const uow = makeUnitOfWork(deps.handle);
 
   // POST /invitations/accept — set a display name and password, consume.
-  // Per-IP limit only: an unauthenticated endpoint, so there is no account key
-  // to fail against (plan section 15 / T4.7 note).
+  // Per-IP limit only (10/hour, NFR): an unauthenticated endpoint, so there is
+  // no account key to fail against (plan section 15 / T4.7 note).
   r.post(
     "/accept",
     deps.rateLimiter.limit({
-      limit: deps.env.RATE_LIMIT_INVITE_ACCEPT_PER_MIN_IP ?? 10,
-      windowMs: 60_000,
+      limit: deps.env.RATE_LIMIT_INVITE_ACCEPT_PER_HOUR_IP ?? 10,
+      windowMs: 3_600_000,
       keys: (c) => [`invite:accept:${clientIp(c, deps.env.TRUSTED_PROXY)}`],
     }),
     async (c) => {

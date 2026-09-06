@@ -109,6 +109,97 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /auth/reset-request:
+    post:
+      operationId: requestPasswordReset
+      summary: Request a password reset for an email
+      description: Unauthenticated (FR-4.2). The response is the same whether or not
+        the email exists, to avoid account enumeration. Rate limited per IP and
+        per account. When email is not configured and the account exists, the
+        reset token is returned in the response.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+              required:
+                - email
+              additionalProperties: false
+      responses:
+        "200":
+          description: Accepted (always the same shape)
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - sent
+                properties:
+                  sent:
+                    type: boolean
+                  resetToken:
+                    type: string
+                  note:
+                    type: string
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limited; see Retry-After
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /auth/reset:
+    post:
+      operationId: completePasswordReset
+      summary: Set a new password from a reset or set-password link
+      description: Unauthenticated (FR-4.3). Consumes a single-use `reset` or
+        `set_password` token, sets the new password, clears
+        must_change_password, and revokes every session for that user. An
+        invalid, expired, or already-used link is 404.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+                newPassword:
+                  type: string
+                  minLength: 8
+              required:
+                - token
+                - newPassword
+              additionalProperties: false
+      responses:
+        "204":
+          description: Password set; all sessions revoked
+        "400":
+          description: Malformed body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Invalid, expired, or already-used link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /auth/change-password:
     post:
       operationId: changePassword
