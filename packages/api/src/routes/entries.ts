@@ -23,6 +23,45 @@ import {
 import type { FuelEntryRow, UnitSystem, VehicleRow } from "../db/schema/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DEFAULT_PAGE = 50;
+const MAX_PAGE = 200;
+const LIST_ORDER = "entry_date desc, created_at desc, id desc";
+
+interface Cursor {
+  entryDate: string;
+  createdAt: Date;
+  id: string;
+}
+
+function encodeCursor(e: FuelEntryRow): string {
+  return Buffer.from(
+    JSON.stringify({
+      entryDate: e.entryDate,
+      createdAt: e.createdAt.toISOString(),
+      id: e.id,
+    }),
+  ).toString("base64url");
+}
+
+function decodeCursor(raw: string): Cursor {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+  } catch {
+    throw err.validation("Malformed cursor");
+  }
+  const p = parsed as Record<string, unknown>;
+  if (
+    typeof p["entryDate"] !== "string" ||
+    typeof p["createdAt"] !== "string" ||
+    typeof p["id"] !== "string"
+  ) {
+    throw err.validation("Malformed cursor");
+  }
+  const createdAt = new Date(p["createdAt"]);
+  if (Number.isNaN(createdAt.getTime())) throw err.validation("Malformed cursor");
+  return { entryDate: p["entryDate"], createdAt, id: p["id"] };
+}
 
 // `volume > 0` (FR-13.1) is a refine, not a field bound: zod-to-json-schema
 // renders `.gt(0)` / `.positive()` as a boolean `exclusiveMinimum`, which is
@@ -240,6 +279,50 @@ export function entryRoutes(deps: AppDeps): Hono<AppHono> {
       { entry: publicEntry(row, user.unitSystem, precision) },
       201,
     );
+  });
+
+  // GET /vehicles/:vehicleId/entries — history (FR-12.2, FR-14).
+  r.get("/vehicles/:vehicleId/entries", ...guard, async (c) => {
+    const user = c.get("user")!;
+    const vehicle = await loadOwnedVehicle(c.req.param("vehicleId"), user.id);
+
+    const rawLimit = c.req.query("limit");
+    const limit =
+      rawLimit == null
+        ? DEFAULT_PAGE
+        : Math.min(Math.max(Number.parseInt(rawLimit, 10) || 0, 1), MAX_PAGE);
+    const from = c.req.query("from");
+    const to = c.req.query("to");
+    if (from != null && !DATE_RE.test(from)) {
+      throw err.validation("`from` must be YYYY-MM-DD");
+    }
+    if (to != null && !DATE_RE.test(to)) {
+      throw err.validation("`to` must be YYYY-MM-DD");
+    }
+    const rawCursor = c.req.query("cursor");
+    const cursor = rawCursor != null ? decodeCursor(rawCursor) : undefined;
+    const precision = await precisionForDeployment();
+
+    // Fetch one extra to know whether another page follows.
+    const rows = await deps.repos.fuelEntries.listForVehicle(vehicle.id, {
+      limit: limit + 1,
+      ...(from != null ? { from } : {}),
+      ...(to != null ? { to } : {}),
+      ...(cursor != null ? { cursor } : {}),
+    });
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+
+    return c.json({
+      entries: page.map((e) => publicEntry(e, user.unitSystem, precision)),
+      page: {
+        limit,
+        order: LIST_ORDER,
+        filter: { from: from ?? null, to: to ?? null },
+        nextCursor: hasMore && last != null ? encodeCursor(last) : null,
+      },
+    });
   });
 
   // GET /entries/:id (FR-12.3)

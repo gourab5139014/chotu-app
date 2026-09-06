@@ -339,6 +339,90 @@ describe("/entries", () => {
     });
   });
 
+  describe("history + pagination (FR-12.2, FR-14, T9c.1)", () => {
+    type Page = {
+      entries: Array<{ id: string; entryDate: string }>;
+      page: {
+        limit: number;
+        order: string;
+        filter: { from: string | null; to: string | null };
+        nextCursor: string | null;
+      };
+    };
+    const list = (query = "") =>
+      t.app.request(`/vehicles/${vehicleId}/entries${query}`, { headers });
+
+    it("orders entry_date desc and echoes the applied filter, order, and page size", async () => {
+      for (const d of ["2026-03-01", "2026-01-01", "2026-02-01"]) {
+        await createEntry({ entryDate: d, odometer: 1, volume: 1, totalCost: 1 });
+      }
+      const res = await list("?from=2026-01-15&to=2026-12-31&limit=10");
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as Page;
+      expect(body.entries.map((e) => e.entryDate)).toEqual([
+        "2026-03-01",
+        "2026-02-01",
+      ]);
+      expect(body.page.limit).toBe(10);
+      expect(body.page.order).toContain("entry_date desc");
+      expect(body.page.filter).toEqual({ from: "2026-01-15", to: "2026-12-31" });
+      expect(body.page.nextCursor).toBeNull();
+    });
+
+    it("400s a malformed cursor", async () => {
+      expect((await list("?cursor=not-base64!!")).status).toBe(400);
+    });
+
+    it("keyset pagination never skips or repeats a row across insert and delete", async () => {
+      // E1..E9 on 2026-01-01 .. 2026-01-09 -> DESC scroll is E9,E8,...,E1.
+      const ids: Record<string, string> = {};
+      for (let i = 1; i <= 9; i++) {
+        const res = await createEntry({
+          entryDate: `2026-01-0${i}`,
+          odometer: i * 10,
+          volume: 1,
+          totalCost: 1,
+        });
+        ids[`E${i}`] = ((await res.json()) as { entry: { id: string } }).entry.id;
+      }
+
+      // Page 1.
+      const p1 = (await (await list("?limit=3")).json()) as Page;
+      expect(p1.entries.map((e) => e.id)).toEqual([ids.E9, ids.E8, ids.E7]);
+      expect(p1.page.nextCursor).not.toBeNull();
+
+      // Mutate the unseen tail: delete E5, insert E10 dated 2026-01-02.
+      await t.app.request(`/entries/${ids.E5}`, { method: "DELETE", headers });
+      const e10 = await createEntry({
+        entryDate: "2026-01-02",
+        odometer: 25,
+        volume: 1,
+        totalCost: 1,
+      });
+      ids.E10 = ((await e10.json()) as { entry: { id: string } }).entry.id;
+
+      // Walk the rest.
+      const seen = [...p1.entries.map((e) => e.id)];
+      let cursor = p1.page.nextCursor;
+      while (cursor != null) {
+        const pg = (await (
+          await list(`?limit=3&cursor=${encodeURIComponent(cursor)}`)
+        ).json()) as Page;
+        seen.push(...pg.entries.map((e) => e.id));
+        cursor = pg.page.nextCursor;
+      }
+
+      // No id returned twice.
+      expect(new Set(seen).size).toBe(seen.length);
+      // E5 (deleted, unseen) never appears; E10 (inserted into the tail) does.
+      expect(seen).not.toContain(ids.E5);
+      expect(seen).toContain(ids.E10);
+      // Every entry currently in the DB was returned exactly once.
+      const stored = await t.repos.fuelEntries.listForVehicleOrdered(vehicleId);
+      expect(seen.slice().sort()).toEqual(stored.map((e) => e.id).sort());
+    });
+  });
+
   it("vehicle delete needs ?cascade=true once entries exist (FR-11.5)", async () => {
     await createEntry({
       entryDate: "2026-01-15",

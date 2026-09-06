@@ -318,6 +318,83 @@ export function buildOpenApiDocument(): Json {
         },
       },
       "/vehicles/{vehicleId}/entries": {
+        get: {
+          operationId: "listFuelEntries",
+          summary: "List a vehicle's fuel entries",
+          description:
+            "Requires authentication (FR-12.2, FR-14). Ordered " +
+            "entry_date desc, then created_at desc. `from`/`to` filter by " +
+            "entry date (inclusive). Pagination is a keyset cursor, not an " +
+            "offset — stable under inserts and deletes. The response echoes " +
+            "the applied filter, order, and page size.",
+          parameters: [
+            {
+              name: "vehicleId",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              schema: { type: "integer", minimum: 1, maximum: 200, default: 50 },
+            },
+            {
+              name: "from",
+              in: "query",
+              required: false,
+              schema: { type: "string", format: "date" },
+            },
+            {
+              name: "to",
+              in: "query",
+              required: false,
+              schema: { type: "string", format: "date" },
+            },
+            {
+              name: "cursor",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": jsonResponse("A page of entries", {
+              type: "object",
+              required: ["entries", "page"],
+              properties: {
+                entries: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/FuelEntry" },
+                },
+                page: {
+                  type: "object",
+                  required: ["limit", "order", "filter", "nextCursor"],
+                  properties: {
+                    limit: { type: "integer" },
+                    order: { type: "string" },
+                    filter: {
+                      type: "object",
+                      required: ["from", "to"],
+                      properties: {
+                        from: { type: ["string", "null"], format: "date" },
+                        to: { type: ["string", "null"], format: "date" },
+                      },
+                    },
+                    nextCursor: {
+                      type: ["string", "null"],
+                      description: "Pass as ?cursor= for the next page; null at the end",
+                    },
+                  },
+                },
+              },
+            }),
+            "400": errorResponse("Bad limit, date, or cursor"),
+            "401": errorResponse("Not authenticated"),
+            "404": errorResponse("No such vehicle for this user"),
+          },
+        },
         post: {
           operationId: "createFuelEntry",
           summary: "Add a fuel entry to a vehicle",

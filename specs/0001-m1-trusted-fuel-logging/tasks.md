@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T9b.2 (slice 9b complete)
-- **Next task:** T9c.1
+- **Last completed task:** T9c.2 (slice 9 complete)
+- **Next task:** T10.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -301,13 +301,13 @@ pause with almost no rework.
 
 ## Slice 9c — History + journey
 
-- [ ] **T9c.1** List entries: default order `entry_date desc, created_at desc`,
+- [x] **T9c.1** List entries: default order `entry_date desc, created_at desc`,
   date-range filter, cursor pagination with the `(entry_date, created_at, id)`
   tiebreak stable under insert/delete; response states filter, order, page size
   (FR-14).
   *done when:* a pagination test inserts and deletes mid-scroll and never skips
   or repeats a row.
-- [ ] **T9c.2** AC-5 journey suite over a real socket: invite → accept → sign in
+- [x] **T9c.2** AC-5 journey suite over a real socket: invite → accept → sign in
   → add vehicle → add fill-up → correct entry, bearer only, no DB access.
   *done when:* the journey test passes against both adapters.
 
