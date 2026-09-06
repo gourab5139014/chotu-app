@@ -94,6 +94,8 @@ export interface InvitationRepo {
   findByHash(tokenHash: string): Promise<InvitationRow | null>;
   /** Mark the invitation accepted by the given user. */
   consume(id: string, acceptedUserId: string, at: Date): Promise<void>;
+  /** Every invitation — admin backup. */
+  listAll(): Promise<InvitationRow[]>;
 }
 
 export interface OidcProviderRepo {
@@ -126,6 +128,8 @@ export interface IdentityRepo {
   countForProvider(providerKey: string): Promise<number>;
   touchLogin(id: string, at: Date): Promise<void>;
   delete(id: string): Promise<void>;
+  /** Every identity — admin backup. */
+  listAll(): Promise<IdentityRow[]>;
 }
 
 export interface VehicleRepo {
@@ -142,6 +146,8 @@ export interface VehicleRepo {
     patch: Partial<Omit<VehicleRow, "id" | "userId" | "createdAt">>,
   ): Promise<VehicleRow>;
   delete(id: string): Promise<void>;
+  /** Every vehicle in the deployment — admin reconciliation and export. */
+  listAll(): Promise<VehicleRow[]>;
 }
 
 export interface FuelEntryListFilter {
@@ -175,6 +181,10 @@ export interface FuelEntryRepo {
   countForVehicle(vehicleId: string): Promise<number>;
   /** Remove every entry for a vehicle. Returns how many were deleted. */
   deleteForVehicle(vehicleId: string): Promise<number>;
+  /** Every entry the user owns, through the vehicle chain — reconcile / export. */
+  listForUser(userId: string): Promise<FuelEntryRow[]>;
+  /** Every entry in the deployment — admin reconciliation and backup. */
+  listAll(): Promise<FuelEntryRow[]>;
 }
 
 export interface AuditRepo {

@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T9c.2 (slice 9 complete)
-- **Next task:** T10.1
+- **Last completed task:** T10.3 (slice 10 complete)
+- **Next task:** T11.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -313,18 +313,18 @@ pause with almost no rework.
 
 ## Slice 10 — Reconciliation + export
 
-- [ ] **T10.1** `reconcile/` check registry: `duplicate`, `orphaned`,
+- [x] **T10.1** `reconcile/` check registry: `duplicate`, `orphaned`,
   `odometer-tie`, `odometer-decrease`, `missing-field`, `out-of-range`
   (FR-17.3).
   *done when:* each fixture (`duplicate`, `orphaned`, `odometer-decrease`,
   `invalid-values`) produces exactly its expected findings; `clean` produces
   none.
-- [ ] **T10.2** `GET /reconcile` (per-user) and `GET /admin/reconcile`
+- [x] **T10.2** `GET /reconcile` (per-user) and `GET /admin/reconcile`
   (deployment-wide: record id + user id + check code only, no field values) —
   FR-17.1, FR-17.2.
   *done when:* contract tests pass; the admin response schema has no entry
   field.
-- [ ] **T10.3** `GET /export` (per-user JSON: `schemaVersion`, `canonicalUnits`,
+- [x] **T10.3** `GET /export` (per-user JSON: `schemaVersion`, `canonicalUnits`,
   `fuelVolumePrecision`, data) and `GET /admin/export` (all tables, secrets
   excluded) — FR-16, FR-18.1.
   *done when:* a round-trip test rebuilds the user's dataset from the export in

@@ -362,6 +362,10 @@ export function makeRepos(handle: DbHandle): Repos {
           )
           .where(eq(s.invitation.id, id));
       },
+      async listAll() {
+        const rows = await db.select().from(s.invitation);
+        return rows.map((r: any) => mappers.invitation.toDomain(r));
+      },
     },
 
     oidcProviders: {
@@ -499,6 +503,10 @@ export function makeRepos(handle: DbHandle): Repos {
       async delete(id) {
         await db.delete(s.identity).where(eq(s.identity.id, id));
       },
+      async listAll() {
+        const rows = await db.select().from(s.identity);
+        return rows.map((r: any) => mappers.identity.toDomain(r));
+      },
     },
 
     vehicles: {
@@ -546,6 +554,10 @@ export function makeRepos(handle: DbHandle): Repos {
       },
       async delete(id) {
         await db.delete(s.vehicle).where(eq(s.vehicle.id, id));
+      },
+      async listAll() {
+        const rows = await db.select().from(s.vehicle);
+        return rows.map((r: any) => mappers.vehicle.toDomain(r));
       },
     },
 
@@ -630,6 +642,18 @@ export function makeRepos(handle: DbHandle): Repos {
           db.delete(s.fuelEntry).where(eq(s.fuelEntry.vehicleId, vehicleId)),
         );
         return rows.length;
+      },
+      async listForUser(userId) {
+        const rows = await db
+          .select({ e: s.fuelEntry })
+          .from(s.fuelEntry)
+          .innerJoin(s.vehicle, eq(s.fuelEntry.vehicleId, s.vehicle.id))
+          .where(eq(s.vehicle.userId, userId));
+        return rows.map((r: any) => mappers.fuelEntry.toDomain(r.e));
+      },
+      async listAll() {
+        const rows = await db.select().from(s.fuelEntry);
+        return rows.map((r: any) => mappers.fuelEntry.toDomain(r));
       },
     },
   };
