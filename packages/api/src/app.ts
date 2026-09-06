@@ -17,6 +17,7 @@ import { invitationRoutes } from "./routes/invitations";
 import { oidcAdminRoutes } from "./routes/oidc-admin";
 import { oidcRoutes } from "./routes/oidc";
 import { profileRoutes } from "./routes/profile";
+import { reconcileRoutes } from "./routes/reconcile";
 import { registerRoutes } from "./routes/register";
 import { tokenRoutes } from "./routes/tokens";
 import { vehicleRoutes } from "./routes/vehicles";
@@ -59,6 +60,7 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
   app.route("/identities", identityRoutes(deps));
   app.route("/vehicles", vehicleRoutes(deps));
   app.route("/", entryRoutes(deps));
+  app.route("/reconcile", reconcileRoutes(deps));
   app.route("/invitations", invitationRoutes(deps));
   app.route("/", registerRoutes(deps));
 

@@ -515,6 +515,55 @@ export function buildOpenApiDocument(): Json {
           },
         },
       },
+      "/reconcile": {
+        get: {
+          operationId: "reconcile",
+          summary: "Run reconciliation checks over the caller's own data",
+          description:
+            "Requires authentication (FR-17.1). Read-only. Returns every " +
+            "finding with a record id, check code, and a value-free message. " +
+            "A clean dataset returns an empty list (FR-17.5).",
+          responses: {
+            "200": jsonResponse("The findings", {
+              type: "object",
+              required: ["findings"],
+              properties: {
+                findings: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/ReconcileFinding" },
+                },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+          },
+        },
+      },
+      "/admin/reconcile": {
+        get: {
+          operationId: "adminReconcile",
+          summary: "Run reconciliation deployment-wide",
+          description:
+            "Admin only (FR-17.2, INV-9). Each finding carries a record id, " +
+            "the owning user id, and a check code — no fuel-entry field " +
+            "values and no message.",
+          responses: {
+            "200": jsonResponse("The findings", {
+              type: "object",
+              required: ["findings"],
+              properties: {
+                findings: {
+                  type: "array",
+                  items: {
+                    $ref: "#/components/schemas/AdminReconcileFinding",
+                  },
+                },
+              },
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+          },
+        },
+      },
       "/profile": {
         get: {
           operationId: "getProfile",
@@ -1264,6 +1313,47 @@ export function buildOpenApiDocument(): Json {
             fuelVolumePrecision: { type: "integer", minimum: 1, maximum: 3 },
             sessionTtlSeconds: { type: "integer", minimum: 60 },
             apiTokenTtlSeconds: { type: ["integer", "null"], minimum: 60 },
+          },
+        },
+        ReconcileFinding: {
+          type: "object",
+          required: ["recordType", "recordId", "vehicleId", "checkCode", "message"],
+          properties: {
+            recordType: { type: "string", enum: ["fuel_entry", "vehicle"] },
+            recordId: { type: "string" },
+            vehicleId: { type: ["string", "null"] },
+            checkCode: {
+              type: "string",
+              enum: [
+                "duplicate",
+                "orphaned",
+                "odometer_tie",
+                "odometer_decrease",
+                "missing_field",
+                "out_of_range",
+              ],
+            },
+            message: { type: "string" },
+          },
+        },
+        AdminReconcileFinding: {
+          type: "object",
+          required: ["recordType", "recordId", "userId", "checkCode"],
+          properties: {
+            recordType: { type: "string", enum: ["fuel_entry", "vehicle"] },
+            recordId: { type: "string" },
+            userId: { type: ["string", "null"] },
+            checkCode: {
+              type: "string",
+              enum: [
+                "duplicate",
+                "orphaned",
+                "odometer_tie",
+                "odometer_decrease",
+                "missing_field",
+                "out_of_range",
+              ],
+            },
           },
         },
         FuelEntry: {

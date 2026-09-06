@@ -142,6 +142,8 @@ export interface VehicleRepo {
     patch: Partial<Omit<VehicleRow, "id" | "userId" | "createdAt">>,
   ): Promise<VehicleRow>;
   delete(id: string): Promise<void>;
+  /** Every vehicle in the deployment — admin reconciliation and export. */
+  listAll(): Promise<VehicleRow[]>;
 }
 
 export interface FuelEntryListFilter {
@@ -175,6 +177,10 @@ export interface FuelEntryRepo {
   countForVehicle(vehicleId: string): Promise<number>;
   /** Remove every entry for a vehicle. Returns how many were deleted. */
   deleteForVehicle(vehicleId: string): Promise<number>;
+  /** Every entry the user owns, through the vehicle chain — reconcile / export. */
+  listForUser(userId: string): Promise<FuelEntryRow[]>;
+  /** Every entry in the deployment — admin reconciliation and backup. */
+  listAll(): Promise<FuelEntryRow[]>;
 }
 
 export interface AuditRepo {

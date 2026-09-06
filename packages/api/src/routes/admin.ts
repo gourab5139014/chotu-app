@@ -20,6 +20,7 @@ import { makeUnitOfWork, runTxSteps } from "../db/uow";
 import { err } from "../domain/errors";
 import { isValidTimeZone } from "../domain/time-zone";
 import { newId } from "../domain/id";
+import { runReconcile } from "../reconcile";
 import type { AppDeps, AppHono } from "../http/context";
 import { parseJson } from "../http/validate";
 import { protectAdmin } from "../middleware/admin";
@@ -533,6 +534,35 @@ export function adminRoutes(deps: AppDeps): Hono<AppHono> {
     ]);
 
     return c.body(null, 204);
+  });
+
+  // GET /admin/reconcile — deployment-wide (FR-17.2, INV-9). Record id, owning
+  // user id, and check code only. No fuel-entry field values, no message.
+  r.get("/reconcile", async (c) => {
+    const [vehicles, entries, settings] = await Promise.all([
+      deps.repos.vehicles.listAll(),
+      deps.repos.fuelEntries.listAll(),
+      deps.repos.settings.get(),
+    ]);
+    const ownerOf = new Map(vehicles.map((v) => [v.id, v.userId]));
+
+    const findings = runReconcile({
+      vehicles,
+      entries,
+      fuelVolumePrecision: settings?.fuelVolumePrecision ?? 3,
+    });
+
+    return c.json({
+      findings: findings.map((f) => ({
+        recordType: f.recordType,
+        recordId: f.recordId,
+        userId:
+          f.recordType === "vehicle"
+            ? (ownerOf.get(f.recordId) ?? null)
+            : (f.vehicleId != null ? (ownerOf.get(f.vehicleId) ?? null) : null),
+        checkCode: f.checkCode,
+      })),
+    });
   });
 
   return r;

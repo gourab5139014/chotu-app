@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T10.1
-- **Next task:** T10.2
+- **Last completed task:** T10.2
+- **Next task:** T10.3
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -319,7 +319,7 @@ pause with almost no rework.
   *done when:* each fixture (`duplicate`, `orphaned`, `odometer-decrease`,
   `invalid-values`) produces exactly its expected findings; `clean` produces
   none.
-- [ ] **T10.2** `GET /reconcile` (per-user) and `GET /admin/reconcile`
+- [x] **T10.2** `GET /reconcile` (per-user) and `GET /admin/reconcile`
   (deployment-wide: record id + user id + check code only, no field values) —
   FR-17.1, FR-17.2.
   *done when:* contract tests pass; the admin response schema has no entry
