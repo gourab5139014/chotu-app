@@ -1,10 +1,15 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { insertFuelEntryInTx, updateFuelEntryInTx } from "../db/repositories";
-import { makeUnitOfWork, runTxSteps } from "../db/uow";
+import {
+  insertFuelEntryInTx,
+  listVehicleEntriesInTx,
+  updateFuelEntryInTx,
+} from "../db/repositories";
+import { makeUnitOfWork, runTxSteps, type Tx } from "../db/uow";
 import { err } from "../domain/errors";
 import { newId } from "../domain/id";
+import { assertOdometerProgression } from "../domain/odometer";
 import type { AppDeps, AppHono } from "../http/context";
 import { parseJson } from "../http/validate";
 import { protect } from "../middleware/protect";
@@ -144,6 +149,28 @@ export function entryRoutes(deps: AppDeps): Hono<AppHono> {
     return v;
   }
 
+  /**
+   * A `runTxSteps` step (under the vehicle row lock) that reads the vehicle's
+   * entries and throws `odometer_decrease` if `candidate` would break INV-2.
+   */
+  function guardOdometer(
+    vehicleId: string,
+    initialOdometerMiE3: number,
+    candidate: Parameters<typeof assertOdometerProgression>[2],
+    mode: "create" | "update",
+  ) {
+    return (tx: Tx): unknown => {
+      const listed = listVehicleEntriesInTx(tx, vehicleId);
+      if (Array.isArray(listed)) {
+        assertOdometerProgression(listed, initialOdometerMiE3, candidate, mode);
+        return undefined;
+      }
+      return listed.then((entries) =>
+        assertOdometerProgression(entries, initialOdometerMiE3, candidate, mode),
+      );
+    };
+  }
+
   async function loadOwnedEntry(
     id: string,
     userId: string,
@@ -191,10 +218,21 @@ export function entryRoutes(deps: AppDeps): Hono<AppHono> {
       updatedAt: now,
     };
 
-    // The vehicle lock and the INV checks (INV-2 / INV-3 / INV-4) land in
-    // T9a.3 and T9b; the write already runs under the lock so those become
-    // extra steps, not a rewrite.
+    // INV-2 (FR-13.3): the guard reads the vehicle's entries and the write
+    // both run inside one uow holding the vehicle row lock, so two concurrent
+    // writers cannot both pass and then both commit (FR-13.7).
     await runTxSteps(uow, { vehicleId: vehicle.id }, [
+      guardOdometer(
+        vehicle.id,
+        vehicle.initialOdometerMiE3,
+        {
+          id: row.id,
+          entryDate: row.entryDate,
+          createdAt: row.createdAt,
+          odometerMiE3: row.odometerMiE3,
+        },
+        "create",
+      ),
       (tx) => insertFuelEntryInTx(tx, row),
     ]);
 
@@ -262,7 +300,16 @@ export function entryRoutes(deps: AppDeps): Hono<AppHono> {
       },
     };
 
+    // INV-2: re-check the sequence with the updated position and odometer,
+    // under the vehicle row lock (FR-13.3, FR-13.7).
+    const candidate = {
+      id: entry.id,
+      entryDate: patch.entryDate ?? entry.entryDate,
+      createdAt: entry.createdAt,
+      odometerMiE3: patch.odometerMiE3 ?? entry.odometerMiE3,
+    };
     await runTxSteps(uow, { vehicleId: entry.vehicleId }, [
+      guardOdometer(entry.vehicleId, vehicle.initialOdometerMiE3, candidate, "update"),
       (tx) => updateFuelEntryInTx(tx, entry.id, patch),
     ]);
 

@@ -227,6 +227,118 @@ describe("/entries", () => {
     expect(ok.status).toBe(201);
   });
 
+  describe("odometer progression (INV-2, T9b.1)", () => {
+    const mk = (entryDate: string, odometer: number) => ({
+      entryDate,
+      odometer,
+      volume: 10,
+      totalCost: 30,
+    });
+
+    it("accepts a non-decreasing sequence and an exact tie", async () => {
+      expect((await createEntry(mk("2026-01-05", 100))).status).toBe(201);
+      expect((await createEntry(mk("2026-01-12", 250))).status).toBe(201);
+      expect((await createEntry(mk("2026-01-20", 250))).status).toBe(201); // tie
+    });
+
+    it("rejects an appended entry that decreases (422 odometer_decrease)", async () => {
+      await createEntry(mk("2026-01-05", 300));
+      const res = await createEntry(mk("2026-01-12", 200));
+      expect(res.status).toBe(422);
+      expect(((await res.json()) as { code: string }).code).toBe(
+        "odometer_decrease",
+      );
+    });
+
+    it("rejects a create below the vehicle's starting odometer", async () => {
+      // vehicle created with initialOdometer 0, so use a fresh vehicle.
+      const v = await t.app.request("/vehicles", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: "High Start", initialOdometer: 5000 }),
+      });
+      const vid = ((await v.json()) as { vehicle: { id: string } }).vehicle.id;
+      const res = await t.app.request(`/vehicles/${vid}/entries`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(mk("2026-01-05", 4000)),
+      });
+      expect(res.status).toBe(422);
+    });
+
+    it("rejects a back-dated entry that lands mid-sequence and decreases", async () => {
+      await createEntry(mk("2026-01-05", 100));
+      await createEntry(mk("2026-01-20", 500));
+      const res = await createEntry(mk("2026-01-10", 50)); // between, and < 100
+      expect(res.status).toBe(422);
+    });
+
+    it("rejects an update that would make an adjacent pair decrease", async () => {
+      const a = await createEntry(mk("2026-01-05", 100));
+      await createEntry(mk("2026-01-20", 500));
+      const aId = ((await a.json()) as { entry: { id: string } }).entry.id;
+      const res = await t.app.request(`/entries/${aId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ odometer: 800 }), // now > the 2026-01-20 entry
+      });
+      expect(res.status).toBe(422);
+    });
+
+    it("allows an update that corrects a value upward within bounds", async () => {
+      const a = await createEntry(mk("2026-01-05", 100));
+      await createEntry(mk("2026-01-20", 500));
+      const aId = ((await a.json()) as { entry: { id: string } }).entry.id;
+      const res = await t.app.request(`/entries/${aId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ odometer: 300 }),
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it("concurrent creates never leave a decreasing adjacent pair (T9b.2)", async () => {
+      for (let i = 0; i < 5; i++) {
+        const v = await t.app.request("/vehicles", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ name: `Race ${i}`, initialOdometer: 0 }),
+        });
+        const vid = ((await v.json()) as { vehicle: { id: string } }).vehicle.id;
+        await t.app.request(`/vehicles/${vid}/entries`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(mk("2026-01-10", 1000)),
+        });
+
+        // Both dated after the baseline; each passes on its own against [1000],
+        // but one ordering of the two would decrease. The vehicle row lock
+        // serialises the check-and-write (FR-13.7).
+        const [ra, rb] = await Promise.all([
+          t.app.request(`/vehicles/${vid}/entries`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(mk("2026-01-20", 1500)),
+          }),
+          t.app.request(`/vehicles/${vid}/entries`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(mk("2026-01-20", 1200)),
+          }),
+        ]);
+
+        expect([ra.status, rb.status].filter((s) => s === 201).length).toBeGreaterThanOrEqual(1);
+
+        const ordered = await t.repos.fuelEntries.listForVehicleOrdered(vid);
+        for (let j = 1; j < ordered.length; j++) {
+          expect(ordered[j]!.odometerMiE3).toBeGreaterThanOrEqual(
+            ordered[j - 1]!.odometerMiE3,
+          );
+        }
+      }
+    });
+  });
+
   it("vehicle delete needs ?cascade=true once entries exist (FR-11.5)", async () => {
     await createEntry({
       entryDate: "2026-01-15",

@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T9a.3 (slice 9a complete)
-- **Next task:** T9b.1
+- **Last completed task:** T9b.2 (slice 9b complete)
+- **Next task:** T9c.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -289,13 +289,13 @@ pause with almost no rework.
 
 ## Slice 9b — Odometer progression
 
-- [ ] **T9b.1** INV-2: in `uow.run` after `tx.lockVehicle`, read both
+- [x] **T9b.1** INV-2: in `uow.run` after `tx.lockVehicle`, read both
   neighbours in `(entry_date, created_at, id)` order, check non-decreasing and
   the first entry against `vehicle.initial_odometer_mi_e3`; reject
   `odometer_decrease`; allow a tie.
   *done when:* the `odometer-decrease` fixture (adjacent pair + mid-sequence
   back-date) drives passing tests.
-- [ ] **T9b.2** Contention test: concurrent creates on one vehicle — Postgres
+- [x] **T9b.2** Contention test: concurrent creates on one vehicle — Postgres
   real race, SQLite serialisation / `SQLITE_BUSY`.
   *done when:* no run produces a decreasing adjacent pair.
 
