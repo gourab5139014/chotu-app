@@ -20,6 +20,7 @@ import { makeUnitOfWork, runTxSteps } from "../db/uow";
 import { err } from "../domain/errors";
 import { isValidTimeZone } from "../domain/time-zone";
 import { newId } from "../domain/id";
+import { buildAdminExport } from "../export";
 import { runReconcile } from "../reconcile";
 import type { AppDeps, AppHono } from "../http/context";
 import { parseJson } from "../http/validate";
@@ -563,6 +564,11 @@ export function adminRoutes(deps: AppDeps): Hono<AppHono> {
         checkCode: f.checkCode,
       })),
     });
+  });
+
+  // GET /admin/export — full deployment backup (FR-18.1).
+  r.get("/export", async (c) => {
+    return c.json(await buildAdminExport(deps.repos));
   });
 
   return r;

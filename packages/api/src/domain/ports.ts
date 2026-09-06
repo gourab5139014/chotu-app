@@ -94,6 +94,8 @@ export interface InvitationRepo {
   findByHash(tokenHash: string): Promise<InvitationRow | null>;
   /** Mark the invitation accepted by the given user. */
   consume(id: string, acceptedUserId: string, at: Date): Promise<void>;
+  /** Every invitation — admin backup. */
+  listAll(): Promise<InvitationRow[]>;
 }
 
 export interface OidcProviderRepo {
@@ -126,6 +128,8 @@ export interface IdentityRepo {
   countForProvider(providerKey: string): Promise<number>;
   touchLogin(id: string, at: Date): Promise<void>;
   delete(id: string): Promise<void>;
+  /** Every identity — admin backup. */
+  listAll(): Promise<IdentityRow[]>;
 }
 
 export interface VehicleRepo {

@@ -515,6 +515,44 @@ export function buildOpenApiDocument(): Json {
           },
         },
       },
+      "/export": {
+        get: {
+          operationId: "exportOwnData",
+          summary: "Export the caller's own data",
+          description:
+            "Requires authentication (FR-16). One schema-versioned JSON " +
+            "document: schemaVersion, canonicalUnits, fuelVolumePrecision, " +
+            "profile, vehicles, fuelEntries. Complete enough to rebuild the " +
+            "dataset later; import is not in M1.",
+          responses: {
+            "200": jsonResponse("The export document", {
+              $ref: "#/components/schemas/UserExport",
+            }),
+            "401": errorResponse("Not authenticated"),
+          },
+        },
+      },
+      "/admin/export": {
+        get: {
+          operationId: "adminExport",
+          summary: "Full deployment backup",
+          description:
+            "Admin only (FR-18.1). Every substantive table plus the schema " +
+            "version and canonical units. Credential material (password and " +
+            "token hashes, live sessions, OIDC login state) is left out — a " +
+            "restore re-issues those. `client_secret_ref` is an environment " +
+            "reference, not a secret, and is kept.",
+          responses: {
+            "200": jsonResponse("The backup document", {
+              type: "object",
+              description: "Deployment backup — see the description",
+              additionalProperties: true,
+            }),
+            "401": errorResponse("Not authenticated"),
+            "403": errorResponse("Admin role required"),
+          },
+        },
+      },
       "/reconcile": {
         get: {
           operationId: "reconcile",
@@ -1313,6 +1351,43 @@ export function buildOpenApiDocument(): Json {
             fuelVolumePrecision: { type: "integer", minimum: 1, maximum: 3 },
             sessionTtlSeconds: { type: "integer", minimum: 60 },
             apiTokenTtlSeconds: { type: ["integer", "null"], minimum: 60 },
+          },
+        },
+        UserExport: {
+          type: "object",
+          required: [
+            "exportFormatVersion",
+            "schemaVersion",
+            "canonicalUnits",
+            "exportedAt",
+            "fuelVolumePrecision",
+            "profile",
+            "vehicles",
+            "fuelEntries",
+          ],
+          properties: {
+            exportFormatVersion: { type: "integer" },
+            schemaVersion: { type: "integer" },
+            canonicalUnits: {
+              type: "object",
+              required: ["distance", "volume", "money"],
+              properties: {
+                distance: { type: "string", const: "mi_e3" },
+                volume: { type: "string", const: "gal_e3" },
+                money: { type: "string", const: "usd_cents" },
+              },
+            },
+            exportedAt: { type: "string", format: "date-time" },
+            fuelVolumePrecision: { type: "integer" },
+            profile: { type: "object", additionalProperties: true },
+            vehicles: {
+              type: "array",
+              items: { type: "object", additionalProperties: true },
+            },
+            fuelEntries: {
+              type: "array",
+              items: { type: "object", additionalProperties: true },
+            },
           },
         },
         ReconcileFinding: {

@@ -12,6 +12,7 @@ import { requestId } from "./middleware/request-id";
 import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
 import { entryRoutes } from "./routes/entries";
+import { exportRoutes } from "./routes/exports";
 import { identityRoutes } from "./routes/identities";
 import { invitationRoutes } from "./routes/invitations";
 import { oidcAdminRoutes } from "./routes/oidc-admin";
@@ -61,6 +62,7 @@ export function buildApp(deps: AppDeps): Hono<AppHono> {
   app.route("/vehicles", vehicleRoutes(deps));
   app.route("/", entryRoutes(deps));
   app.route("/reconcile", reconcileRoutes(deps));
+  app.route("/export", exportRoutes(deps));
   app.route("/invitations", invitationRoutes(deps));
   app.route("/", registerRoutes(deps));
 

@@ -362,6 +362,10 @@ export function makeRepos(handle: DbHandle): Repos {
           )
           .where(eq(s.invitation.id, id));
       },
+      async listAll() {
+        const rows = await db.select().from(s.invitation);
+        return rows.map((r: any) => mappers.invitation.toDomain(r));
+      },
     },
 
     oidcProviders: {
@@ -498,6 +502,10 @@ export function makeRepos(handle: DbHandle): Repos {
       },
       async delete(id) {
         await db.delete(s.identity).where(eq(s.identity.id, id));
+      },
+      async listAll() {
+        const rows = await db.select().from(s.identity);
+        return rows.map((r: any) => mappers.identity.toDomain(r));
       },
     },
 

@@ -9,8 +9,8 @@ pause with almost no rework.
 - **Branch:** `build/m1`
 - **Plan:** `plan.md` (revised, two independent review rounds; verdict
   yes-with-nits, nits cleared)
-- **Last completed task:** T10.2
-- **Next task:** T10.3
+- **Last completed task:** T10.3 (slice 10 complete)
+- **Next task:** T11.1
 - **Verify the tree is green:** `pnpm -w run verify` (typecheck + lint +
   per-dialect `drizzle-kit check` + vitest). The `verify` script exists from
   T1.8; before that, run the commands named in each task.
@@ -324,7 +324,7 @@ pause with almost no rework.
   FR-17.1, FR-17.2.
   *done when:* contract tests pass; the admin response schema has no entry
   field.
-- [ ] **T10.3** `GET /export` (per-user JSON: `schemaVersion`, `canonicalUnits`,
+- [x] **T10.3** `GET /export` (per-user JSON: `schemaVersion`, `canonicalUnits`,
   `fuelVolumePrecision`, data) and `GET /admin/export` (all tables, secrets
   excluded) — FR-16, FR-18.1.
   *done when:* a round-trip test rebuilds the user's dataset from the export in
